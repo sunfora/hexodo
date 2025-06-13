@@ -2,38 +2,23 @@
   // @var boolean $session_is_working
   $session_is_working = match (session_status()) {
     PHP_SESSION_DISABLED => false,
-    PHP_SESSION_NONE => session_start(),
+    PHP_SESSION_NONE => @session_start(),
     PHP_SESSION_ACTIVE => true
   };
 
-  if ($session_is_working) {
+  if (! $session_is_working) {
     header("Location: session_failed.html");
     die("Session failed to start");
   }
 
-  
-  $db = new PDO("sqlite:db/tokoharu.db"); 
 
-  function force_remove_old_sessions($user, $current) {
+  // @var PDO $db
+  $db = require_once 'db.php';
     
-  }
-    
-  function get_user_by_session($session) {
-    /*
-     * @var PDO $db
-     */
-    global $db;
-    $smth = $db->prepare('SELECT user 
-      FROM sessions
-      WHERE session_id = :session'
-    );
-
-    $smth->bindParam('session', $session, PDO::PARAM_STR);
-    $smth->execute();
-    $user = $smth->fetchColumn();
-
-    if ($user) {
-      return $user;
+  function get_user() {
+    $logged_on = $_SESSION['logged_in'] ?? false;
+    if ($logged_on) {
+      return $_SESSION['username'];
     } else {
       return null;
     }
@@ -43,7 +28,7 @@
     ?>
     <a href="/account.php" id="account">
       <? 
-         $user = get_user_by_session(session_id());
+         $user = get_user();
          $user ??= "login";
          echo $user; 
       ?>
@@ -52,12 +37,36 @@
   }
 
   function load_his_tasks() {
-    ?>
-      <p> Tasks </p>
-      <ol>
-        <li> task </li>
-      </ol>
-    <?
+    global $db;
+    $user = get_user();
+    if (!$user) {
+      echo "<p> No tasks found </p>";
+    }
+    
+    $task = null;
+    if (!isset($_SESSION['task_id'])) {
+      $stmt = $db->prepare("SELECT id, title, description, completed FROM tasks WHERE user_id = :username ORDER BY id ASC LIMIT 1");
+      $stmt->execute([
+          ':username' => $user
+      ]);
+      $task = $stmt->fetch(PDO::FETCH_ASSOC);
+    } else {
+      $stmt = $db->prepare("SELECT id, title, description, completed FROM tasks WHERE id = :task_id");
+      $stmt->execute([
+          ':task_id' => $_SESSION['task_id']
+      ]);
+      $task = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+    if (!$task) {
+      echo "<p> No tasks found </p>";
+    } else {
+      ?>
+        <ul> </ul>
+        <p> <b> <? echo $task['title']; ?> </b> </p>
+        <p> <? echo $task['description']; ?> </p>
+        <ul> </ul>
+      <?
+    }
   }
 
   function load_navigation() {
