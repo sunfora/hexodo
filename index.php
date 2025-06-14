@@ -1,96 +1,86 @@
 <?
-  // @var boolean $session_is_working
-  $session_is_working = match (session_status()) {
-    PHP_SESSION_DISABLED => false,
-    PHP_SESSION_NONE => @session_start(),
-    PHP_SESSION_ACTIVE => true
-  };
-
-  if (! $session_is_working) {
-    header("Location: session_failed.html");
-    die("Session failed to start");
-  }
-
-
-  // @var PDO $db
-  $db = require_once 'db.php';
+// @var Session $session
+$session = require_once "session.php";
+// @var PDO $db
+$db = require_once 'db.php';
     
-  function get_user() {
-    $logged_on = $_SESSION['logged_in'] ?? false;
-    if ($logged_on) {
-      return $_SESSION['username'];
-    } else {
-      return null;
-    }
-  }
+function get_user() {
+  global $session;
+  return $session->get('username');
+}
 
-  function load_user() {
+function load_user() {
+  ?>
+  <a href="/account.php" id="account">
+    <? 
+       $user = get_user();
+       $user ??= "login";
+       echo $user; 
     ?>
-    <a href="/account.php" id="account">
-      <? 
-         $user = get_user();
-         $user ??= "login";
-         echo $user; 
-      ?>
-    </a>
+  </a>
+  <?
+}
+
+function load_his_tasks() {
+  global $session, $db;
+  $user = get_user();
+
+  if (!$user) {
+    echo "<p> No tasks found </p>";
+    return;
+  }
+  
+  $task = null;
+  if ($session->get('task_id') === null) {
+    $stmt = $db->prepare("SELECT id, title, description, completed FROM tasks WHERE user_id = :username ORDER BY id ASC LIMIT 1");
+    $stmt->execute([
+        ':username' => $user
+    ]);
+    $task = $stmt->fetch(PDO::FETCH_ASSOC);
+    $session->set('task_id', $task['id']);
+  } else {
+    $stmt = $db->prepare("SELECT id, title, description, completed FROM tasks WHERE id = :task_id");
+    $stmt->execute([
+        ':task_id' => $session->get('task_id')
+    ]);
+    $task = $stmt->fetch(PDO::FETCH_ASSOC);
+  }
+  if (!$task) {
+    echo "<p> No tasks found </p>";
+  } else {
+    ?>
+      <ul> </ul>
+      <p> <b> <? echo $task['title']; ?> </b> </p>
+      <p> <? echo $task['id']; ?> </p>
+      <p> <? echo $task['description']; ?> </p>
+      <p> <? echo $task['completed']; ?> </p>
+      <ul> </ul>
     <?
   }
+}
 
-  function load_his_tasks() {
-    global $db;
-    $user = get_user();
-    if (!$user) {
-      echo "<p> No tasks found </p>";
-    }
-    
-    $task = null;
-    if (!isset($_SESSION['task_id'])) {
-      $stmt = $db->prepare("SELECT id, title, description, completed FROM tasks WHERE user_id = :username ORDER BY id ASC LIMIT 1");
-      $stmt->execute([
-          ':username' => $user
-      ]);
-      $task = $stmt->fetch(PDO::FETCH_ASSOC);
-    } else {
-      $stmt = $db->prepare("SELECT id, title, description, completed FROM tasks WHERE id = :task_id");
-      $stmt->execute([
-          ':task_id' => $_SESSION['task_id']
-      ]);
-      $task = $stmt->fetch(PDO::FETCH_ASSOC);
-    }
-    if (!$task) {
-      echo "<p> No tasks found </p>";
-    } else {
-      ?>
-        <ul> </ul>
-        <p> <b> <? echo $task['title']; ?> </b> </p>
-        <p> <? echo $task['description']; ?> </p>
-        <ul> </ul>
-      <?
-    }
-  }
+function load_navigation() {
+  ?>
+  <nav>
+    <ul>
+      <li id="here"> 
+        Main 
+      </li>
+      <li> 
+        <? load_user(); ?>
+      </li>
+    </ul>
+  </nav>
+  <?
+}
 
-  function load_navigation() {
-    ?>
-    <nav>
-      <ul>
-        <li id="here"> 
-          Main 
-        </li>
-        <li> 
-          <? load_user(); ?>
-        </li>
-      </ul>
-    </nav>
-    <?
-  }
-
-  function load_footer() {
-    ?>
-    <footer>
-      <p> session_id: <? echo session_id(); ?> </p>
-    </footer>
-    <?
-  }
+function load_footer() {
+  ?>
+  <footer>
+    <p> session_id: <? echo session_id(); ?> </p>
+  </footer>
+  <?
+}
 ?>
 <!-- 
   actually what should I do?

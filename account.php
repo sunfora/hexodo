@@ -1,17 +1,8 @@
 <?
-// @var boolean $session_is_working
-$session_is_working = match (session_status()) {
-  PHP_SESSION_DISABLED => false,
-  PHP_SESSION_NONE => @session_start(),
-  PHP_SESSION_ACTIVE => true
-};
-
-if (! $session_is_working) {
-  header("Location: session_failed.html");
-  die("Session failed to start");
-}
+$session = require_once "session.php";
 
 function make_login_form() {
+    global $session;
     ?>
     <p>
       Welcome. Please login
@@ -19,7 +10,7 @@ function make_login_form() {
     <?
       if ($_SESSION['form_errors'] ?? false) {
         echo "<ul class='login-error'>";
-        foreach($_SESSION['form_errors'] as $err) {
+        foreach($session->get('form_errors') as $err) {
           echo "<li>";
           echo $err;
           echo "</li>";
@@ -81,14 +72,14 @@ function make_login_form() {
   </head>
   <body>
     <?
-      $logged_in = $_SESSION['logged_in'] ?? false;
+      $logged_in = $session->get('logged_in', false);
       if (!$logged_in) {
         make_login_form();
         exit;
       }
     ?>
         <p>
-          Account: <? echo $_SESSION['username']; ?>
+          Account: <? echo $session->get('username'); ?>
         </p>
         <form action="logout.php" method="post">
             <button type="submit">Logout</button>
