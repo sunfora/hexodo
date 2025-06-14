@@ -1,21 +1,23 @@
 <?
 final class Session {
-  public string $failure_redirect = 'session_failed.html';
+  public static string $failure_redirect = 'session_failed.html';
 
-  public function __construct() {
-    if (! $this->isActive() ) {
-      $this->start();
+  /**
+   * Activates session and redirects onto $failure_redirect page
+   */
+  public static function activate(): void {
+    if (! self::isActive() ) {
+      session_start();
     }
-    if (! $this->isActive() ) {
-      $this->redirect();
+    if (! self::isActive() ) {
+      self::redirect();
     }
   }
 
-  public function start(): bool {
-    return session_start();
-  }
-
-  public function destroy(): bool {
+  /**
+   * Destroys current session entirely with associated cookies.
+   */
+  public static function destroyWithCookies(): bool {
     // Unset all of the session variables
     $_SESSION = [];
 
@@ -33,15 +35,18 @@ final class Session {
     return session_destroy();
   }
 
-  public function get(string $key, mixed $default = null) : mixed {
+  /**
+   * Shorthand for $_SESSION[$key] ?? $default. 
+   * Which returns null when default is not specified.
+   */
+  public static function read(string $key, mixed $default = null) : mixed {
     return $_SESSION[$key] ?? $default; 
   }
 
-  public function set(string $key, mixed $value) : void {
-   $_SESSION[$key] = $value; 
-  }
-
-  public function isActive(): bool {
+  /**
+   * Checks if session is active/inaccessible right now.
+   */
+  public static function isActive(): bool {
     return match (session_status()) {
       PHP_SESSION_DISABLED => false,
       PHP_SESSION_NONE => false,
@@ -49,16 +54,17 @@ final class Session {
     };
   }
 
-  public function redirect(): void {
+  public static function redirect(): void {
     if (headers_sent()) {
       error_log("SESSION[1] : Session inactive \n" . 
                 "SESSION[2] : Redirect failed, headers sent");
     } else {
-      header("Location: " . $this->failure_redirect);
+      header("Location: " . self::$failure_redirect);
       error_log("SESSION[1] : Session is inactive");
     }  
     die(1);
   }
 }
 
-return new Session();
+// configure 
+Session::activate();

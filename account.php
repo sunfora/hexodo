@@ -1,16 +1,16 @@
 <?
-$session = require_once "session.php";
+require_once "session.php";
 
 function make_login_form() {
-    global $session;
     ?>
     <p>
       Welcome. Please login
     </p>
     <?
-      if ($_SESSION['form_errors'] ?? false) {
+      $errors = Session::read('form_errors', []);
+      if (!empty($errors)) {
         echo "<ul class='login-error'>";
-        foreach($session->get('form_errors') as $err) {
+        foreach($errors as $err) {
           echo "<li>";
           echo $err;
           echo "</li>";
@@ -19,11 +19,11 @@ function make_login_form() {
       }
     ?>
 
-    <form class="login-form" method="post" action="auth.php">
+    <form class="login-form" method="post" action="api/login">
       <p> 
         <input id=login 
-               placeholder="login" 
-               name="login" 
+               placeholder="username" 
+               name="username" 
                required /> 
       </p>
       <p>
@@ -72,16 +72,16 @@ function make_login_form() {
   </head>
   <body>
     <?
-      $logged_in = $session->get('logged_in', false);
+      $logged_in = Session::read('logged_in', false);
       if (!$logged_in) {
         make_login_form();
         exit;
       }
     ?>
         <p>
-          Account: <? echo $session->get('username'); ?>
+          Account: <? echo Session::read('username'); ?>
         </p>
-        <form action="logout.php" method="post">
+        <form action="api/logout" method="post">
             <button type="submit">Logout</button>
         </form>
   </body>

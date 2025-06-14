@@ -1,29 +1,20 @@
 <?
-// @var Session $session
-$session = require_once "session.php";
+require_once "session.php";
 // @var PDO $db
 $db = require_once 'db.php';
-    
-function get_user() {
-  global $session;
-  return $session->get('username');
-}
 
 function load_user() {
   ?>
-  <a href="/account.php" id="account">
-    <? 
-       $user = get_user();
-       $user ??= "login";
-       echo $user; 
-    ?>
+  <a href="/account" id="account">
+    <?= Session::read('username', 'login'); ?>
   </a>
   <?
 }
 
 function load_his_tasks() {
-  global $session, $db;
-  $user = get_user();
+  // @var PDO $db
+  global $db;
+  $user = Session::read('username');
 
   if (!$user) {
     echo "<p> No tasks found </p>";
@@ -31,29 +22,30 @@ function load_his_tasks() {
   }
   
   $task = null;
-  if ($session->get('task_id') === null) {
-    $stmt = $db->prepare("SELECT id, title, description, completed FROM tasks WHERE user_id = :username ORDER BY id ASC LIMIT 1");
-    $stmt->execute([
-        ':username' => $user
-    ]);
-    $task = $stmt->fetch(PDO::FETCH_ASSOC);
-    $session->set('task_id', $task['id']);
-  } else {
+  if (isset($_SESSION['task_id'])) {
     $stmt = $db->prepare("SELECT id, title, description, completed FROM tasks WHERE id = :task_id");
     $stmt->execute([
-        ':task_id' => $session->get('task_id')
+      'task_id' => $_SESSION['task_id']
     ]);
     $task = $stmt->fetch(PDO::FETCH_ASSOC);
+  } else {
+    $stmt = $db->prepare("SELECT id, title, description, completed FROM tasks WHERE user_id = :username ORDER BY id ASC LIMIT 1");
+    $stmt->execute([
+      'username' => $user
+    ]);
+    $task = $stmt->fetch(PDO::FETCH_ASSOC);
+    $_SESSION['task_id'] = $task['id'];
   }
+
   if (!$task) {
     echo "<p> No tasks found </p>";
   } else {
     ?>
       <ul> </ul>
-      <p> <b> <? echo $task['title']; ?> </b> </p>
-      <p> <? echo $task['id']; ?> </p>
-      <p> <? echo $task['description']; ?> </p>
-      <p> <? echo $task['completed']; ?> </p>
+      <p> <b> <?= $task['title']; ?> </b> </p>
+      <p> <?= $task['id']; ?> </p>
+      <p> <?= $task['description']; ?> </p>
+      <p> <?= $task['completed']; ?> </p>
       <ul> </ul>
     <?
   }
