@@ -179,23 +179,49 @@ function load_footer() {
           const canvas = document.getElementById('hex-grid');
           const ctx = canvas.getContext('2d');
 
-          function
+          function drawHexagon(radius = 100) {
+            ctx.save()
+
+           const gradient = ctx.createRadialGradient(
+                0, 0, 0,             // Start circle: at center (0,0), radius 0
+                0, 0, radius // End circle: at center (0,0), radius slightly larger than hexagon
+            );
+
+            // Add color stops for a cloudy effect
+            gradient.addColorStop(0,   'rgba(255, 255, 255, 0.9)'); // Center white, nearly opaque
+            gradient.addColorStop(0.6, 'rgba(220, 220, 220, 0.7)'); // Medium gray
+            gradient.addColorStop(0.9, 'rgba(200, 200, 200, 0.6)'); // Darker gray
+            gradient.addColorStop(1,   'rgba(180, 180, 180, 0.5)'); // Even darker, more transparent
+
+            ctx.strokeStyle = 'black';
+            ctx.fillStyle = gradient;
+            ctx.lineWidth = 0.5;
+            let turns = 6;
+            let angle = 2 * Math.PI / turns;
+            ctx.translate(-radius * Math.cos(angle), -radius * Math.sin(angle));
+            ctx.beginPath()
+            for (let i = 0; i < 6; i += 1) {
+              ctx.lineTo(radius, 0);
+              ctx.translate(radius, 0);
+              ctx.rotate(angle);
+            }
+            ctx.closePath();
+            ctx.translate(radius * Math.cos(angle), radius * Math.sin(angle));
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+          }
 
           function drawAnimationFrame() {
             canvas.width = canvas.clientWidth;
             canvas.height = canvas.clientHeight;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            // Draw a blue rectangle that always fills 50% of the canvas width and 30% of the height
-            let speed = 0.001;
-            ctx.save()
             ctx.translate(canvas.width / 2, canvas.height / 2);
+
+            ctx.save()
             let t = (Date.now() / 10000) % 1.0;
             ctx.rotate(t * 2 * Math.PI);
-            const rectWidth = canvas.width * 0.5;
-            const rectHeight = canvas.height * 0.3;
-
-            ctx.fillStyle = 'blue';
-            ctx.fillRect(-rectWidth / 2, -rectHeight / 2, rectWidth, rectHeight);
+            drawHexagon();
             ctx.restore();
           }
           let canvasFrame = null;
