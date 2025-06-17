@@ -12,43 +12,12 @@ function load_user() {
 }
 
 function load_his_tasks() {
-  // @var PDO $db
-  global $db;
-  $user = Session::read('username');
-
-  if (!$user) {
-    echo "<p> No tasks found </p>";
-    return;
-  }
-  
-  $task = null;
-  if (isset($_SESSION['task_id'])) {
-    $stmt = $db->prepare("SELECT id, title, description, completed FROM tasks WHERE id = :task_id");
-    $stmt->execute([
-      'task_id' => $_SESSION['task_id']
-    ]);
-    $task = $stmt->fetch(PDO::FETCH_ASSOC);
-  } else {
-    $stmt = $db->prepare("SELECT id, title, description, completed FROM tasks WHERE user_id = :username ORDER BY id ASC LIMIT 1");
-    $stmt->execute([
-      'username' => $user
-    ]);
-    $task = $stmt->fetch(PDO::FETCH_ASSOC);
-    $_SESSION['task_id'] = $task['id'];
-  }
-
-  if (!$task) {
-    echo "<p> No tasks found </p>";
-  } else {
-    ?>
-      <ul> </ul>
-      <p> <b> <?= $task['title']; ?> </b> </p>
-      <p> <?= $task['id']; ?> </p>
-      <p> <?= $task['description']; ?> </p>
-      <p> <?= $task['completed']; ?> </p>
-      <ul> </ul>
-    <?
-  }
+?>
+  <div class="hex-grid-draggable-container">
+    <canvas id=hex-grid> 
+    </canvas>
+  </div>
+<?
 }
 
 function load_navigation() {
@@ -136,7 +105,29 @@ function load_footer() {
           flex: none;
         }
       }
-      
+      .hex-grid-draggable-container {
+        border: 1px solid black;
+        background: repeating-linear-gradient(
+            45deg,         
+            #000000,       
+            #000000 5px,   
+            #ff8c00 5px,   
+            #ff8c00 10px  
+        );
+        padding: 10px;
+        border-radius: 5px;
+        width: 60vw;
+        height: 500px;  
+        cursor: grab;
+      }
+      #hex-grid {
+        background-color: white;
+        border-radius: 2px;
+        border: 1px solid black;
+        width: 100%;  
+        height: 100%;  
+        cursor: default;
+      }
       footer {
         position: absolute;
         bottom: 0;
@@ -144,6 +135,79 @@ function load_footer() {
       }
     </style> 
     <script>
+      document.addEventListener('DOMContentLoaded', () => {
+          let grid_container_data = {
+              resizing: false,
+              pageX : 0,
+              pageY : 0,
+              width : 0,
+              height: 0,
+              animationFrame: null
+          }
+          const grid_container = document.querySelector('.hex-grid-draggable-container')
+          grid_container.addEventListener('mousedown', (event) => {
+            grid_container.style.cursor = 'crosshair';
+            grid_container_data.pageX = event.pageX;
+            grid_container_data.pageY = event.pageY;
+            grid_container_data.resizing = true;
+            grid_container_data.width = grid_container.clientWidth;
+            grid_container_data.height = grid_container.clientHeight;
+          });
+          document.addEventListener('mousemove', (even) => {
+            if (grid_container_data.resizing) {
+
+              const diffX = grid_container_data.pageX - event.pageX;
+              const diffY = grid_container_data.pageY - event.pageY;
+
+              if (grid_container_data.animationFrame) {
+                cancelAnimationFrame(grid_container_data.animationFrame);
+              } 
+              grid_container_data.animationFrame = requestAnimationFrame( () => {
+                grid_container.style.width = `${Math.max(grid_container_data.width - diffX,  0)}px`;
+                grid_container.style.height = `${Math.max(grid_container_data.height - diffY,  0)}px`;
+              });
+            }
+          });
+          document.addEventListener('mouseup', (event) => {
+            grid_container.style.cursor = 'grab';
+            if (grid_container_data.resizing) {
+              grid_container_data.resizing = false;
+              grid_container_data.animationFrame = null;
+            }
+          });
+
+          const canvas = document.getElementById('hex-grid');
+          const ctx = canvas.getContext('2d');
+
+          function
+
+          function drawAnimationFrame() {
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Draw a blue rectangle that always fills 50% of the canvas width and 30% of the height
+            let speed = 0.001;
+            ctx.save()
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            let t = (Date.now() / 10000) % 1.0;
+            ctx.rotate(t * 2 * Math.PI);
+            const rectWidth = canvas.width * 0.5;
+            const rectHeight = canvas.height * 0.3;
+
+            ctx.fillStyle = 'blue';
+            ctx.fillRect(-rectWidth / 2, -rectHeight / 2, rectWidth, rectHeight);
+            ctx.restore();
+          }
+          let canvasFrame = null;
+          function loop() {
+            if (canvasFrame) {
+              cancelAnimationFrame(canvasFrame);
+            }
+            drawAnimationFrame();
+            canvasFrame = requestAnimationFrame(loop);
+          }
+          requestAnimationFrame(loop);
+      });
     </script>   
   </head>
   <body>
