@@ -146,12 +146,14 @@ function load_footer() {
           }
           const grid_container = document.querySelector('.hex-grid-draggable-container')
           grid_container.addEventListener('mousedown', (event) => {
-            grid_container.style.cursor = 'crosshair';
-            grid_container_data.pageX = event.pageX;
-            grid_container_data.pageY = event.pageY;
-            grid_container_data.resizing = true;
-            grid_container_data.width = grid_container.clientWidth;
-            grid_container_data.height = grid_container.clientHeight;
+            if (event.target === event.currentTarget) {
+              grid_container.style.cursor = 'crosshair';
+              grid_container_data.pageX = event.pageX;
+              grid_container_data.pageY = event.pageY;
+              grid_container_data.resizing = true;
+              grid_container_data.width = grid_container.clientWidth;
+              grid_container_data.height = grid_container.clientHeight;
+            }
           });
           document.addEventListener('mousemove', (even) => {
             if (grid_container_data.resizing) {
