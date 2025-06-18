@@ -17,6 +17,11 @@ function load_his_tasks() {
     <canvas id=hex-grid> 
     </canvas>
   </div>
+  <div>
+    <p id='cam-debug'>
+      cam(0, 0)
+    </p>
+  </div>
 <?
 }
 
@@ -136,6 +141,13 @@ function load_footer() {
     </style> 
     <script>
       document.addEventListener('DOMContentLoaded', () => {
+          const grid_container = document.querySelector('.hex-grid-draggable-container')
+          const canvas = document.getElementById('hex-grid');
+          const cam_debug = document.getElementById('cam-debug');
+          const ctx = canvas.getContext('2d');
+
+          let size = 30
+
           let grid_container_data = {
               resizing: false,
               pageX : 0,
@@ -144,7 +156,6 @@ function load_footer() {
               height: 0,
               animationFrame: null
           }
-          const grid_container = document.querySelector('.hex-grid-draggable-container')
           grid_container.addEventListener('mousedown', (event) => {
             if (event.target === event.currentTarget) {
               grid_container.style.cursor = 'crosshair';
@@ -155,6 +166,28 @@ function load_footer() {
               grid_container_data.height = grid_container.clientHeight;
             }
           });
+
+          let camera = {
+            x: 0,
+            y: 0,
+            savedX: 0,
+            savedY: 0,
+            pageX: 0,
+            pageY: 0,
+            moving: false
+          };
+          cam_debug.textContent = `cam(${camera.x}, ${camera.y})`;
+
+          canvas.addEventListener('mousedown', (event) => {
+            if (event.target === event.currentTarget) {
+              camera.moving = true
+              camera.pageX = event.pageX;
+              camera.pageY = event.pageY;
+              camera.savedX = camera.x;
+              camera.savedY = camera.y;
+            }
+          });
+
           document.addEventListener('mousemove', (even) => {
             if (grid_container_data.resizing) {
 
@@ -169,6 +202,13 @@ function load_footer() {
                 grid_container.style.height = `${Math.max(grid_container_data.height - diffY,  0)}px`;
               });
             }
+
+            if (camera.moving) {
+              camera.x = camera.savedX +  (camera.pageX - event.pageX) / size
+              camera.y = camera.savedY +  (camera.pageY - event.pageY) / size
+              
+              cam_debug.textContent = `cam(${camera.x}, ${camera.y})`;
+            }
           });
           document.addEventListener('mouseup', (event) => {
             grid_container.style.cursor = 'grab';
@@ -176,41 +216,121 @@ function load_footer() {
               grid_container_data.resizing = false;
               grid_container_data.animationFrame = null;
             }
+            if (camera.moving) {
+              camera.moving= false;
+              camera.x = camera.savedX +  (camera.pageX - event.pageX) / size
+              camera.y = camera.savedY +  (camera.pageY - event.pageY) / size
+            }
           });
 
-          const canvas = document.getElementById('hex-grid');
-          const ctx = canvas.getContext('2d');
+          canvas.addEventListener('wheel', (event) => {
+            size += event.wheelDelta / 100
+          });
 
-          function drawHexagon(radius = 100) {
+
+          function cube_round(hex) {
+            let q_i = Math.round(hex.q);
+            let r_i = Math.round(hex.r);
+            let s_i = Math.round(hex.s);
+
+            let q_diff = Math.abs(q_i - hex.q);
+            let r_diff = Math.abs(r_i - hex.r);
+            let s_diff = Math.abs(s_i - hex.s);
+
+            if (q_diff > r_diff && q_diff > s_diff) {
+              q_i = -(r_i + s_i);
+            } else if (r_diff > s_diff) {
+              r_i = -(q_i + s_i);
+            } else {
+              s_i = -(q_i + r_i);
+            }
+
+            return {q: q_i, r: r_i, s: s_i};
+          }
+
+          function pixToHex(x, y) {
+            let q = 2 * x / 3;
+            let r = -1./3 * x + Math.sqrt(3) / 3 * y;
+
+            return {q: q, r: r, s: -(q + r)};
+          }
+          
+
+
+          function cube_to_oddq(hex) {
+            let col = hex.q;
+            let row = hex.r + (hex.q - (hex.q&1)) / 2;
+            return {col: col, row: row};
+          }
+
+          function oddq_to_cube(hex) {
+            let q = hex.col;
+            let r = hex.row - (hex.col - (hex.col&1)) / 2;
+            return {q: q, r: r, s: -(q + r)}
+          }
+
+          function hexToPix(hex) {
+            // hex to cartesian
+            let x = (     3./2 * hex.q                    )
+            let y = (Math.sqrt(3)/2 * hex.q  +  Math.sqrt(3) * hex.r)
+            // scale cartesian coordinates
+            x = x 
+            y = y
+            return {x: x, y: y};
+          }
+
+          function drawGrid() {
+            let corner_x = camera.x - ((canvas.width / 2) / size);
+            let corner_y = camera.y - ((canvas.height/ 2) / size);
+
+            let cube = cube_round(pixToHex(corner_x, corner_y));
+            let hex = cube_to_oddq(cube);
+             
+            const pos = () => {
+              let global = hexToPix(oddq_to_cube(hex));
+              return {x: (global.x - corner_x) * size,
+                      y: (global.y - corner_y) * size}
+            }
+
+            // search corner outside of viewport
+            while (pos().y + 2 * size > 0 || pos().x + 2 * size > 0) {
+              hex.row -= 1;
+              hex.col -= 1;
+            }
+            cam_debug.textContent = `cam(${camera.x} ${camera.y}) ;${hex.col} ${hex.row}`;
+            for (; pos().y - 2 * size < canvas.height; hex.row += 1) {
+              let col_start = hex.col
+              for (; pos().x - 2 * size < canvas.width; hex.col += 1) {
+                ctx.translate(pos().x, pos().y)
+                drawHexagon(`${hex.col} ${hex.row}`)
+                ctx.translate(-pos().x, -pos().y);
+              }
+              hex.col = col_start;
+            }
+          }
+
+          function drawHexagon(text="lol") {
             ctx.save()
 
-           const gradient = ctx.createRadialGradient(
-                0, 0, 0,             // Start circle: at center (0,0), radius 0
-                0, 0, radius // End circle: at center (0,0), radius slightly larger than hexagon
-            );
-
-            // Add color stops for a cloudy effect
-            gradient.addColorStop(0,   'rgba(255, 255, 255, 0.9)'); // Center white, nearly opaque
-            gradient.addColorStop(0.6, 'rgba(220, 220, 220, 0.7)'); // Medium gray
-            gradient.addColorStop(0.9, 'rgba(200, 200, 200, 0.6)'); // Darker gray
-            gradient.addColorStop(1,   'rgba(180, 180, 180, 0.5)'); // Even darker, more transparent
-
             ctx.strokeStyle = 'black';
-            ctx.fillStyle = gradient;
-            ctx.lineWidth = 0.5;
+            ctx.lineWidth = 0.25;
             let turns = 6;
             let angle = 2 * Math.PI / turns;
-            ctx.translate(-radius * Math.cos(angle), -radius * Math.sin(angle));
+            ctx.translate(-size * Math.cos(angle), -size * Math.sin(angle));
             ctx.beginPath()
             for (let i = 0; i < 6; i += 1) {
-              ctx.lineTo(radius, 0);
-              ctx.translate(radius, 0);
+              ctx.lineTo(size, 0);
+              ctx.translate(size, 0);
               ctx.rotate(angle);
             }
             ctx.closePath();
-            ctx.translate(radius * Math.cos(angle), radius * Math.sin(angle));
-            ctx.fill();
+            ctx.translate(size * Math.cos(angle), size * Math.sin(angle));
             ctx.stroke();
+            ctx.font = `${size / 3}px Arial`; // Adjust font size as needed to fit the circle
+            ctx.fillStyle = 'black';
+            ctx.textAlign = 'center'; // Center the text horizontally
+            ctx.textBaseline = 'middle'; // Center the text vertically
+            ctx.fillText(text, 0, 0);
             ctx.restore();
           }
 
@@ -218,13 +338,11 @@ function load_footer() {
             canvas.width = canvas.clientWidth;
             canvas.height = canvas.clientHeight;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.translate(canvas.width / 2, canvas.height / 2);
+            
+            let turns = 6
+            let angle = 2 * Math.PI / turns;
 
-            ctx.save()
-            let t = (Date.now() / 10000) % 1.0;
-            ctx.rotate(t * 2 * Math.PI);
-            drawHexagon();
-            ctx.restore();
+            drawGrid();
           }
           let canvasFrame = null;
           function loop() {
