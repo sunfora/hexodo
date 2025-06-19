@@ -13,9 +13,15 @@ function load_user() {
 
 function load_his_tasks() {
 ?>
-  <div class="hex-grid-draggable-container">
-    <canvas id=hex-grid> 
-    </canvas>
+  <div class="todo-ui">
+    <div class="hex-grid-draggable-container">
+      <canvas id=hex-grid> 
+      </canvas>
+    </div>
+    <div class="task-viewer">
+      <h2> Task name </h2>
+      <p> description </p>
+    </div>
   </div>
   <div>
     <p id='cam-debug'>
@@ -124,6 +130,7 @@ function load_footer() {
         width: 60vw;
         height: 500px;  
         cursor: grab;
+        flex: none;
       }
       #hex-grid {
         background-color: white;
@@ -132,6 +139,16 @@ function load_footer() {
         width: 100%;  
         height: 100%;  
         cursor: default;
+      }
+      .todo-ui {
+        display: flex;
+        width: 100vw;
+      }
+      .task-viewer {
+        flex: 1;
+        border: 1px solid black;
+        margin: 0 2em;
+        padding: 1em;
       }
       footer {
         position: absolute;
@@ -167,6 +184,17 @@ function load_footer() {
             }
           });
 
+          let underCursor = {
+            row : 0,
+            col : 0,
+            time: 0
+          }
+
+          let selected = {
+            row : 0,
+            col : 0,
+          }
+
           let camera = {
             x: 0,
             y: 0,
@@ -188,7 +216,7 @@ function load_footer() {
             }
           });
 
-          document.addEventListener('mousemove', (even) => {
+          document.addEventListener('mousemove', (event) => {
             if (grid_container_data.resizing) {
 
               const diffX = grid_container_data.pageX - event.pageX;
@@ -203,13 +231,50 @@ function load_footer() {
               });
             }
 
+          });
+          
+          canvas.addEventListener('mousemove', (event) => {
             if (camera.moving) {
               camera.x = camera.savedX +  (camera.pageX - event.pageX) / size
               camera.y = camera.savedY +  (camera.pageY - event.pageY) / size
               
               cam_debug.textContent = `cam(${camera.x}, ${camera.y})`;
             }
-          });
+            let {x: canvas_x, y: canvas_y} = canvas.getBoundingClientRect();
+            let global_x = camera.x - (canvas_x - event.clientX + canvas.width / 2) / size
+            let global_y = camera.y - (canvas_y - event.clientY + canvas.height / 2) / size
+            let hex = cube_to_oddq(cube_round(pixToHex(global_x, global_y)))
+            if (!(hex.col === underCursor.col && hex.row === underCursor.row)) {
+              underCursor.row = hex.row
+              underCursor.col = hex.col
+              underCursor.time = Date.now()
+            }
+          })
+
+          canvas.addEventListener('dblclick', (event) => {
+          fetch('api/get_card?row=1&col=2')
+            .then(response => {
+              // Check if the request was successful (status code 200-299)
+              if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+              }
+              // Parse the JSON response
+              return response.json();
+            })
+            .then(data => {
+              // Work with the data
+              console.log('GET Data:', data);
+            })
+            .catch(error => {
+              // Handle any errors that occurred during the fetch
+              console.error('There was a problem with the fetch operation:', error);
+            });
+            let task_viewer = document.querySelector('.task-viewer')
+            task_viewer.querySelector('p').textContent = `(${underCursor.col} ${underCursor.row})`
+            selected.row = underCursor.row
+            selected.col = underCursor.col
+          })
+
           document.addEventListener('mouseup', (event) => {
             grid_container.style.cursor = 'grab';
             if (grid_container_data.resizing) {
@@ -224,6 +289,7 @@ function load_footer() {
           });
 
           canvas.addEventListener('wheel', (event) => {
+            event.preventDefault()
             size += event.wheelDelta / 100
           });
 
@@ -297,23 +363,50 @@ function load_footer() {
               hex.row -= 1;
               hex.col -= 1;
             }
+
+            const HIGHLIGHT_DURATION = 200;
+            const START_COLOR = { r: 255, g: 255, b: 255 }; // White
+            const END_COLOR = { r: 255, g: 215, b: 0 };     // Gold (FFD700) - standard gold
+            const FLICKERING_COLOR_START = { r: 154, g: 205, b: 50 };     // Gold (FFD700) - standard gold
+            const FLICKERING_COLOR_END = { r: 154, g: 155, b: 50 }; 
+
+            // Function to linearly interpolate between two values
+            function lerp(start, end, t) {
+              return start + t * (end - start);
+            }
+
             cam_debug.textContent = `cam(${camera.x} ${camera.y}) ;${hex.col} ${hex.row}`;
             for (; pos().y - 2 * size < canvas.height; hex.row += 1) {
               let col_start = hex.col
               for (; pos().x - 2 * size < canvas.width; hex.col += 1) {
                 ctx.translate(pos().x, pos().y)
-                drawHexagon(`${hex.col} ${hex.row}`)
+                if (hex.row === underCursor.row && hex.col === underCursor.col) {
+                  let nt = Math.min(Date.now() - underCursor.time, HIGHLIGHT_DURATION) / HIGHLIGHT_DURATION;
+                  const r = Math.round(lerp(START_COLOR.r, END_COLOR.r, nt));
+                  const g = Math.round(lerp(START_COLOR.g, END_COLOR.g, nt));
+                  const b = Math.round(lerp(START_COLOR.b, END_COLOR.b, nt));
+                  drawHexagon(`${hex.col} ${hex.row}`, `rgb(${r}, ${g}, ${b})`)
+                } else if (hex.row === selected.row && hex.col === selected.col) {
+                  let nt = Math.abs(Math.sin(Date.now() / 500));
+                  const r = Math.round(lerp(FLICKERING_COLOR_START.r, FLICKERING_COLOR_END.r, nt));
+                  const g = Math.round(lerp(FLICKERING_COLOR_START.g, FLICKERING_COLOR_END.g, nt));
+                  const b = Math.round(lerp(FLICKERING_COLOR_START.b, FLICKERING_COLOR_END.b, nt));
+                  drawHexagon(`${hex.col} ${hex.row}`, `rgb(${r}, ${g}, ${b})`)
+                } else {
+                  drawHexagon(`${hex.col} ${hex.row}`)
+                }
                 ctx.translate(-pos().x, -pos().y);
               }
               hex.col = col_start;
             }
           }
 
-          function drawHexagon(text="lol") {
+          function drawHexagon(text="lol", style='transparent') {
             ctx.save()
 
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 0.25;
+            ctx.fillStyle = style;
             let turns = 6;
             let angle = 2 * Math.PI / turns;
             ctx.translate(-size * Math.cos(angle), -size * Math.sin(angle));
@@ -326,6 +419,7 @@ function load_footer() {
             ctx.closePath();
             ctx.translate(size * Math.cos(angle), size * Math.sin(angle));
             ctx.stroke();
+            ctx.fill();
             ctx.font = `${size / 3}px Arial`; // Adjust font size as needed to fit the circle
             ctx.fillStyle = 'black';
             ctx.textAlign = 'center'; // Center the text horizontally

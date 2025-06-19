@@ -65,8 +65,8 @@ try {
   // search user account and retrieve hash
   $phash_stmt = $db->prepare( 
     <<<SQL
-      SELECT password_hash FROM users WHERE
-        username = :username
+      SELECT user_password_hash FROM users WHERE
+        user_name = :username
     SQL
   );
   $phash_stmt->execute(
@@ -78,17 +78,17 @@ try {
 
   // if user does not exist we should create him
   if (!$password_hash) {
-    $password_hash = password_hash($password);
+    $password_hash = password_hash($password, PASSWORD_DEFAULT);
 
     $create_user_stmt = $db->prepare(
       <<<SQL
-        INSERT INTO users (username, password_hash) VALUES
-          (:username, :password_hash)
+        INSERT INTO users (user_name, user_password_hash) VALUES
+          (:user_name, :user_password_hash)
       SQL
     );
     $create_user_stmt->execute([
-      'username' => $username,
-      'password_hash' => $password_hash
+      'user_name' => $username,
+      'user_password_hash' => $password_hash
     ]);
   }
 
@@ -105,10 +105,11 @@ try {
   $db->commit();
 } catch (\PDOException $e) {
   error_log("AUTH[1] : " . $e->getMessage());
-} finally {
+} catch (\Throwable $e) {
+  error_log("AUTH[1] : " . $e->getMessage());
   if ($db->inTransaction()) {
     $db->rollBack();
     $_SESSION['form_errors'][] = "Transaction failed.";
   }
-  redirect();
 }
+redirect();

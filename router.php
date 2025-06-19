@@ -42,7 +42,11 @@ if ($requestUri === '/api/login') {
   require 'api/login.php';
   exit;
 }
-
+if ($requestUri === '/api/get_card') {
+  require_method(["GET"]);
+  require 'api/get_card.php';
+  exit;
+}
 
 // tasks
 if (preg_match('#^/api/card/(\d+)$#', $requestUri, $matches)) {
