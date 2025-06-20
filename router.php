@@ -1,4 +1,14 @@
 <?
+ini_set('display_errors', 'Off');         // <-- IMPORTANT: Do NOT display errors on screen
+ini_set('display_startup_errors', 'Off'); // <-- IMPORTANT: Do NOT display startup errors on screen
+error_reporting(E_ALL);                   // Report all types of errors
+
+// Enable logging of errors
+ini_set('log_errors', 'On');
+
+// Set error_log to an empty string so PHP logs to the SAPI logger (your terminal for dev server)
+ini_set('error_log', '');
+
 require_once "http_page.php";
 // Get the requested URI
 $requestUri = $_SERVER['REQUEST_URI'];
@@ -42,9 +52,35 @@ if ($requestUri === '/api/login') {
   require 'api/login.php';
   exit;
 }
-if ($requestUri === '/api/get_card') {
+
+if ($requestUri === '/api/boards') {
+  require_method(["POST"]);
+  require 'api/create_board.php';
+  exit;
+}
+
+if (preg_match('#^/api/boards/(\d+)$#', $requestUri, $matches)) {
   require_method(["GET"]);
-  require 'api/get_card.php';
+  $_GET['board_id'] = (int) $matches[1];
+  require 'api/get_board_info.php';
+  exit;
+}
+
+if (preg_match('#^/api/boards/(\d+)/cells$#', $requestUri, $matches)) {
+  require_method(["GET", "POST"]);
+  $_GET['board_id'] = (int) $matches[1];
+  if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    require 'api/get_cell_info.php';
+  } else {
+    require 'api/write_cell_info.php';
+  }
+  exit;
+}
+
+if (preg_match('#^/api/boards/(\d+)/chunks$#', $requestUri, $matches)) {
+  require_method(["GET"]);
+  $_GET['board_id'] = (int) $matches[1];
+  require 'api/get_chunk.php';
   exit;
 }
 

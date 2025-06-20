@@ -1,7 +1,9 @@
 <?
 require_once "session.php";
+// @var ContextDB $db_operations
+$db_operations = require_once 'db.php';
 // @var PDO $db
-$db = require_once 'db.php';
+$db = $db_operations->db;
 
 function load_user() {
   ?>
@@ -11,6 +13,29 @@ function load_user() {
   <?
 }
 
+function load_board() : array {
+  // @var ContextDB $db_operations
+  global $db_operations;
+
+  if (isset($_GET['board_id'])) {
+    $board_id = (int) $_GET['board_id'];
+    $_SESSION['board_id'] = $board_id;
+    return $db_operations->find_board($board_id);
+  } else if (isset($_SESSION['board_id'])) {
+    $board_id = $_SESSION['board_id'];
+    return $db_operations->find_board($board_id);
+  } else {
+    // create new board
+    $user_name = Session::read('username', 'anon');
+    $board_name = 'new board';
+    $board = $db_operations->create_board($user_name, $board_name);
+    $_SESSION['board_id'] = $board['board_id'];
+    return $board;
+  }
+}
+
+$board = load_board();
+
 function load_his_tasks() {
 ?>
   <div class="todo-ui">
@@ -19,8 +44,19 @@ function load_his_tasks() {
       </canvas>
     </div>
     <div class="task-viewer">
-      <h2> Task name </h2>
-      <p> description </p>
+    <form id="task-form">
+        <h2 id="task-form-header">Loading Task...</h2>
+        <label for="task-title">Task Title:</label>
+        <br>
+        <input type="text" id="task-title" name="task-title" required>
+        <br>
+        <label for="task-description">Task Description:</label>
+        <br>
+        <textarea id="task-description" name="task-description" rows="8"></textarea>
+
+        <br>
+        <button type="submit">Save Changes</button>
+      </form>
     </div>
   </div>
   <div>
@@ -32,11 +68,13 @@ function load_his_tasks() {
 }
 
 function load_navigation() {
+  global $board;
   ?>
   <nav>
     <ul>
       <li id="here"> 
-        Main 
+         <?= htmlspecialchars($board['board_name']) ?> ;
+         <?= htmlspecialchars($board['board_id']) ?> 
       </li>
       <li> 
         <? load_user(); ?>
@@ -157,6 +195,9 @@ function load_footer() {
       }
     </style> 
     <script>
+      const board_id = <?= $board['board_id'] ?>;
+      const user_name = "<?= Session::read('username', 'anon') ?>";
+
       document.addEventListener('DOMContentLoaded', () => {
           const grid_container = document.querySelector('.hex-grid-draggable-container')
           const canvas = document.getElementById('hex-grid');
@@ -195,6 +236,15 @@ function load_footer() {
             col : 0,
           }
 
+          function update_form(header_message) {
+            let title = document.querySelector('#task-title');
+            let description = document.querySelector('#task-description');
+            let header = document.querySelector('#task-form-header');
+            title.value = selected.title;
+            description.value = selected.description;
+            header.textContent = header_message;
+          }
+
           let camera = {
             x: 0,
             y: 0,
@@ -205,6 +255,47 @@ function load_footer() {
             moving: false
           };
           cam_debug.textContent = `cam(${camera.x}, ${camera.y})`;
+
+          const task_form = document.getElementById('task-form');
+          const task_title = document.getElementById('task-title');
+          const task_description = document.getElementById('task-description');
+
+          task_form.addEventListener('submit', async function(event) {
+            event.preventDefault(); // Crucial: Stop the browser's default form submission (page reload)
+
+            const formData = new URLSearchParams();
+
+            formData.append('task_description', task_description.value);
+            formData.append('task_title', task_title.value);
+            formData.append('task_id', selected.id);
+            formData.append('task_completed', selected.completed);
+            formData.append('user_id', user_name); 
+
+            try {
+                const response = await fetch(`/api/boards/${board_id}/cells?row=${selected.row}&col=${selected.col}`, {
+                    method: 'POST', 
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData.toString()
+                });
+
+                // PHP will still likely respond with JSON, so parse it
+                console.log(response)
+                const data = await response.json();
+                if (response.ok) {
+                  selected.title = data.task_title;
+                  selected.id = data.task_id;
+                  selected.description = data.task_description;
+                  selected.completed = data.task_completed;
+                  update_form(`Edit task ${selected.id}`);
+                  let coords = chunk_coords(selected);
+                  chunk.get(`${coords.col}, ${coords.row}`).data[`${selected.col}, ${selected.row}`] = selected.id
+                }
+            } catch (error) {
+                console.error('Fetch error:', error);
+            }
+          });
 
           canvas.addEventListener('mousedown', (event) => {
             if (event.target === event.currentTarget) {
@@ -251,29 +342,44 @@ function load_footer() {
             }
           })
 
-          canvas.addEventListener('dblclick', (event) => {
-          fetch('api/get_card?row=1&col=2')
-            .then(response => {
-              // Check if the request was successful (status code 200-299)
-              if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-              }
-              // Parse the JSON response
-              return response.json();
-            })
-            .then(data => {
-              // Work with the data
-              console.log('GET Data:', data);
-            })
-            .catch(error => {
-              // Handle any errors that occurred during the fetch
-              console.error('There was a problem with the fetch operation:', error);
-            });
-            let task_viewer = document.querySelector('.task-viewer')
-            task_viewer.querySelector('p').textContent = `(${underCursor.col} ${underCursor.row})`
+
+          const retrieve_current = (event) => {
+            let task_viewer = document.querySelector('.task-viewer');
+
             selected.row = underCursor.row
             selected.col = underCursor.col
-          })
+
+            fetch(`api/boards/${board_id}/cells?row=${selected.row}&col=${selected.col}`)
+              .then(response => {
+                // Check if the request was successful (status code 200-299)
+                if (!response.ok) {
+                  throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                // Parse the JSON response
+                return response.json();
+              })
+              .then( (data) => {
+                // Work with the data
+                if (data === null) {
+                  selected.id = null;
+                  selected.title = 'New task';
+                  selected.description = 'description';
+                  selected.completed = false;
+                  update_form('Create task');
+                } else {
+                  selected.title = data.task_title;
+                  selected.id = data.task_id;
+                  selected.description = data.task_description;
+                  selected.completed = data.task_completed;
+                  update_form(`Edit task: ${selected.id}`);
+                }
+              })
+              .catch(error => {
+                // Handle any errors that occurred during the fetch
+                console.error('There was a problem with the fetch operation:', error);
+              });
+          };
+          canvas.addEventListener('dblclick', retrieve_current);
 
           document.addEventListener('mouseup', (event) => {
             grid_container.style.cursor = 'grab';
@@ -345,6 +451,57 @@ function load_footer() {
             return {x: x, y: y};
           }
 
+          let chunk = new Map();
+
+          function chunk_coords(hex) {
+            return {
+              col : (hex.col - ((hex.col % 10 + 10) % 10)) / 10,
+              row : (hex.row - ((hex.row % 10 + 10) % 10)) / 10
+            };
+          }
+
+          let requests_made = 0;
+          let global_timeout = 0;
+
+          function from_chunk(hex) {
+            let pos = chunk_coords(hex);
+            let key = `${pos.col}, ${pos.row}`;
+            if (chunk.has(key) && chunk.get(key).loaded) {
+              return chunk.get(key).data[`${hex.col}, ${hex.row}`];
+            } else if (requests_made > 4 || Date.now() < global_timeout) {
+              return null;
+            } else if (chunk.has(key) && Date.now() < chunk.get(key).timeout) {
+              return null; 
+            } else {
+              global_timeout = Date.now() + 100
+              chunk.set(key, {
+                loaded: false,
+                timeout: Date.now() + 10000,
+                data: null
+              });
+              requests_made += 1;
+              fetch(`api/boards/${board_id}/chunks?col=${pos.col}&row=${pos.row}`).then((response) => {
+                if (!response.ok) {
+                  throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+              }).then((data) => {
+                result = {}
+                for (const point of data) {
+                  result[`${point.cell_col}, ${point.cell_row}`] = point.task_id
+                }
+                chunk.get(key).data = result
+                console.log(result);
+                chunk.get(key).loaded = true;
+                requests_made -= 1;
+              }).catch( (error) => {
+                console.log(error);
+                requests_made -= 1;
+              })
+              return null;
+            }
+          }
+
           function drawGrid() {
             let corner_x = camera.x - ((canvas.width / 2) / size);
             let corner_y = camera.y - ((canvas.height/ 2) / size);
@@ -365,7 +522,7 @@ function load_footer() {
             }
 
             const HIGHLIGHT_DURATION = 200;
-            const START_COLOR = { r: 255, g: 255, b: 255 }; // White
+            const START_COLOR = { r: 255, g: 255, b: 255}; // White
             const END_COLOR = { r: 255, g: 215, b: 0 };     // Gold (FFD700) - standard gold
             const FLICKERING_COLOR_START = { r: 154, g: 205, b: 50 };     // Gold (FFD700) - standard gold
             const FLICKERING_COLOR_END = { r: 154, g: 155, b: 50 }; 
@@ -374,12 +531,12 @@ function load_footer() {
             function lerp(start, end, t) {
               return start + t * (end - start);
             }
-
             cam_debug.textContent = `cam(${camera.x} ${camera.y}) ;${hex.col} ${hex.row}`;
             for (; pos().y - 2 * size < canvas.height; hex.row += 1) {
               let col_start = hex.col
               for (; pos().x - 2 * size < canvas.width; hex.col += 1) {
                 ctx.translate(pos().x, pos().y)
+                let value = from_chunk(hex);
                 if (hex.row === underCursor.row && hex.col === underCursor.col) {
                   let nt = Math.min(Date.now() - underCursor.time, HIGHLIGHT_DURATION) / HIGHLIGHT_DURATION;
                   const r = Math.round(lerp(START_COLOR.r, END_COLOR.r, nt));
@@ -392,8 +549,12 @@ function load_footer() {
                   const g = Math.round(lerp(FLICKERING_COLOR_START.g, FLICKERING_COLOR_END.g, nt));
                   const b = Math.round(lerp(FLICKERING_COLOR_START.b, FLICKERING_COLOR_END.b, nt));
                   drawHexagon(`${hex.col} ${hex.row}`, `rgb(${r}, ${g}, ${b})`)
-                } else {
+                } else if (value) {
+                  drawHexagon(`${hex.col} ${hex.row}`, 'orange')
+                } else if (value !== null) {
                   drawHexagon(`${hex.col} ${hex.row}`)
+                } else {
+                  drawHexagon(`${hex.col} ${hex.row}`, 'grey')
                 }
                 ctx.translate(-pos().x, -pos().y);
               }
@@ -446,6 +607,9 @@ function load_footer() {
             drawAnimationFrame();
             canvasFrame = requestAnimationFrame(loop);
           }
+
+          // wire up 
+          retrieve_current();
           requestAnimationFrame(loop);
       });
     </script>   

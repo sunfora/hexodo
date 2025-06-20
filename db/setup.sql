@@ -14,15 +14,13 @@ CREATE TABLE tasks (
     task_description TEXT NOT NULL,
     user_id INTEGER NOT NULL,
     task_completed INTEGER DEFAULT 0,
-
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
 CREATE TABLE boards (
   board_id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
-  board_name TEXT
-
+  board_name TEXT,
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
@@ -31,9 +29,7 @@ CREATE TABLE cells (
   board_id INTEGER NOT NULL,
   cell_row INTEGER NOT NULL,
   cell_col INTEGER NOT NULL,
-
   PRIMARY KEY (board_id, cell_row, cell_col),
-
   FOREIGN KEY (board_id) REFERENCES boards(board_id) ON DELETE CASCADE,
   FOREIGN KEY (task_id) REFERENCES tasks(task_id) ON DELETE CASCADE
 );

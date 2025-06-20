@@ -1,7 +1,9 @@
 <?
 require_once "session.php";
+// @var ContextDB $db
+$db_operations = require_once "db.php";
 // @var PDO $db
-$db = require_once "db.php";
+$db = $db_operations->db;
 
 const START_PAGE = '/';
 const FORM_PAGE = '/account';
