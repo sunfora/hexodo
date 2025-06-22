@@ -2,7 +2,6 @@
 const board_id = window.appConfig.board.board_id;
 const user_name = window.appConfig.user_id;
 
-const grid_container = document.querySelector('.hex-grid-draggable-container')
 const canvas = document.getElementById('hex-grid');
 const cam_debug = document.getElementById('cam-debug');
 const ctx = canvas.getContext('2d');
@@ -183,29 +182,9 @@ class Camera {
       height: z_height * this.fovY
     }
   }
-
 }
 
 let size = 30
-
-let grid_container_data = {
-    resizing: false,
-    pageX : 0,
-    pageY : 0,
-    width : 0,
-    height: 0,
-    animationFrame: null
-}
-grid_container.addEventListener('mousedown', (event) => {
-  if (event.target === event.currentTarget) {
-    grid_container.style.cursor = 'crosshair';
-    grid_container_data.pageX = event.pageX;
-    grid_container_data.pageY = event.pageY;
-    grid_container_data.resizing = true;
-    grid_container_data.width = grid_container.clientWidth;
-    grid_container_data.height = grid_container.clientHeight;
-  }
-});
 
 let underCursor = {
   row : 0,
@@ -236,6 +215,7 @@ let camera = {
   pageY: 0,
   moving: false
 };
+
 cam_debug.textContent = `cam(${camera.x}, ${camera.y})`;
 
 const task_form = document.getElementById('task-form');
@@ -289,23 +269,6 @@ canvas.addEventListener('mousedown', (event) => {
   }
 });
 
-document.addEventListener('mousemove', (event) => {
-  if (grid_container_data.resizing) {
-
-    const diffX = grid_container_data.pageX - event.pageX;
-    const diffY = grid_container_data.pageY - event.pageY;
-
-    if (grid_container_data.animationFrame) {
-      cancelAnimationFrame(grid_container_data.animationFrame);
-    } 
-    grid_container_data.animationFrame = requestAnimationFrame( () => {
-      grid_container.style.width = `${Math.max(grid_container_data.width - diffX,  0)}px`;
-      grid_container.style.height = `${Math.max(grid_container_data.height - diffY,  0)}px`;
-    });
-  }
-
-});
-
 canvas.addEventListener('mousemove', (event) => {
   if (camera.moving) {
     camera.x = camera.savedX +  (camera.pageX - event.pageX) / size
@@ -322,7 +285,7 @@ canvas.addEventListener('mousemove', (event) => {
     underCursor.col = hex.col
     underCursor.time = Date.now()
   }
-})
+});
 
 
 const retrieve_current = (event) => {
@@ -364,11 +327,6 @@ const retrieve_current = (event) => {
 canvas.addEventListener('dblclick', retrieve_current);
 
 document.addEventListener('mouseup', (event) => {
-  grid_container.style.cursor = 'grab';
-  if (grid_container_data.resizing) {
-    grid_container_data.resizing = false;
-    grid_container_data.animationFrame = null;
-  }
   if (camera.moving) {
     camera.moving= false;
     camera.x = camera.savedX +  (camera.pageX - event.pageX) / size
