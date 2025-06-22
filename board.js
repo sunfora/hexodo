@@ -1,3 +1,4 @@
+"use strict" 
 const board_id = window.appConfig.board.board_id;
 const user_name = window.appConfig.user_id;
 
@@ -5,6 +6,185 @@ const grid_container = document.querySelector('.hex-grid-draggable-container')
 const canvas = document.getElementById('hex-grid');
 const cam_debug = document.getElementById('cam-debug');
 const ctx = canvas.getContext('2d');
+
+/**
+ * Usage: for tracking down the visible part of the world.
+ */
+class Camera {
+  /**
+   * Is camera moved by user?
+   */
+  isDragged = false;
+
+  /**
+   * Coordinate transform object.
+   * Usage: for mouse dragging events / zoom and panning animations.
+   */
+  transform = {
+    x: 0,
+    y: 0,
+    z: 0
+  }
+  
+  /**
+   * Current camera position (the center of the lens).
+   * Usage: for altering the base position of the camera.
+   */
+  position = {
+    x: 0,
+    y: 0,
+    z: 0
+  }
+
+  /**
+   * X coordinate for the center of the camera lens.
+   *
+   * On `get` it returns the position with transform (as you might expect).
+   * On `set` it however could go 2 ways: keep the transform or keep the position intact.
+   *
+   * I keep the transform and alter the position.
+   * 
+   * Why? Because the transform is primarily for effects and slight variations.
+   * Whereas I believe when you want to set coordinate, you do that to position the camera.
+   * If you want to change effect and transform - use transform object directly.
+   * 
+   * @type {number}
+   */
+  get x() {
+    return this.position.x + this.transform.x;
+  }
+  set x(value) {
+    this.position.x = value - this.transform.x;
+  }
+
+  /**
+   * Y coordinate for the center of the camera lens.
+   *
+   * On `get` it returns the position with transform (as you might expect).
+   * On `set` it however could go 2 ways: keep the transform or keep the position intact.
+   *
+   * I keep the transform and alter the position.
+   * 
+   * Why? Because the transform is primarily for effects and slight variations.
+   * Whereas I believe when you want to set coordinate, you do that to position the camera.
+   * If you want to change effect and transform - use transform object directly.
+   * 
+   * @type {number}
+   */
+  get y() {
+    return this.position.y + this.transform.y;
+  }
+  set y(value) {
+    this.position.y = value - this.transform.y;
+  }
+
+  /**
+   * Z coordinate for center of the camera lens.
+   *
+   * On `get` it returns the position with transform (as you might expect).
+   * On `set` it however could go 2 ways: keep the transform or keep the position intact.
+   *
+   * I keep the transform and alter the position.
+   * 
+   * Why? Because the transform is primarily for effects and slight variations.
+   * Whereas I believe when you want to set coordinate, you do that to position the camera.
+   * If you want to change effect and transform - use transform object directly.
+   *
+   * BY THE WAY: 
+   *  why even have Z coordinate on 2d map?
+   *  the reason for that is that I want to use 3d transforms in future
+   *  and kind of orthographic simple pseudo 3d for cells also
+   * 
+   * @type {number}
+   */
+  get z() {
+    return this.position.z + this.transform.z;
+  }
+  set z(value) {
+    this.position.z = value - this.transform.z;
+  }
+
+  /**
+   * Horizontal field of view (angle of camera)
+   * Usage: to alter the visible part of the world and draw at correct aspect ratio.
+   * @type {number}
+   */
+  fovX = 1;
+  
+  /**
+   * The width of camera lens (synonym for `fovX`) 
+   * Since distance from the observer to camera lens is always 1 (for the sake of simplicity)
+   */
+  get width() {
+    return this.fovX;
+  }
+  set width(value) {
+    this.fovX = value;
+  }
+
+  /**
+   * Vertical field of view.
+   * Usage: to alter the visible part of the world and draw at correct aspect ratio.
+   * @type {number}
+   */
+  fovY = 1;
+
+  /**
+   * The height of camera lens (synonym for `fovY`) 
+   * Since distance from the observer to camera lens is always 1 (for the sake of simplicity)
+   */
+  get height() {
+    return this.fovY;
+  }
+  set height(value) {
+    this.fovY = value;
+  }
+
+  /**
+   * Sets position to position with transform, resets transform to zero.
+   * Usage: when animation / drag is done.
+   */
+  applyTransform() {
+    this.position = {
+      x: this.position.x + this.transform.x,
+      y: this.position.y + this.transform.y,
+      z: this.position.z + this.transform.z
+    };
+    this.transform = {
+      x: 0,
+      y: 0,
+      z: 0 
+    };
+  }
+
+  /**
+   * Aspect ratio of camera (alters width and height of the lens).
+   * Currently when you set it, the sizes are determined via crop of the square of the biggest size.
+   */
+  get aspectRatio() {
+    return this.width / this.height;
+  }
+  set aspectRatio(value) {
+    const width  = this.width;
+    const height = this.height;
+    if (value > 1) {
+      this.width = Math.max(width, height);
+      this.height = Math.max(width, height) / value;
+    } else {
+      this.width = Math.max(width, height) * value;
+      this.height = Math.max(width, height);
+    }
+  }
+
+  visiblePlane(z = 0) {
+    const z_height = 1 + this.z - z;
+    return {
+      width: z_height * this.fovX, 
+      height: z_height * this.fovY
+    }
+  }
+
+}
 
 let size = 30
 
@@ -288,7 +468,7 @@ function from_chunk(hex) {
       }
       return response.json();
     }).then((data) => {
-      result = {}
+      let result = {}
       for (const point of data) {
         result[`${point.cell_col}, ${point.cell_row}`] = point.task_id
       }
@@ -395,10 +575,6 @@ function drawAnimationFrame() {
   canvas.width = canvas.clientWidth;
   canvas.height = canvas.clientHeight;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  
-  let turns = 6
-  let angle = 2 * Math.PI / turns;
-
   drawGrid();
 }
 let canvasFrame = null;
