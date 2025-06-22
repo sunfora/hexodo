@@ -49,6 +49,7 @@ function load_his_tasks() {
       </canvas>
     </div>
     <div class="task-viewer">
+    <button id="remove-button"> remove task from cell </button>
     <form id="task-form">
         <h2 id="task-form-header">Loading Task...</h2>
         <label for="task-title">Task Title:</label>

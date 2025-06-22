@@ -67,12 +67,14 @@ if (preg_match('#^/api/boards/(\d+)$#', $requestUri, $matches)) {
 }
 
 if (preg_match('#^/api/boards/(\d+)/cells$#', $requestUri, $matches)) {
-  require_method(["GET", "POST"]);
+  require_method(["GET", "POST", "DELETE"]);
   $_GET['board_id'] = (int) $matches[1];
   if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     require 'api/get_cell_info.php';
-  } else {
+  } else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require 'api/write_cell_info.php';
+  } else {
+    require 'api/delete_from_cell.php';
   }
   exit;
 }

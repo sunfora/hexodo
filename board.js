@@ -2,6 +2,7 @@
 const board_id = window.appConfig.board.board_id;
 const user_name = window.appConfig.user_id;
 
+const remove_button = document.getElementById('remove-button');
 const canvas = document.getElementById('hex-grid');
 const cam_debug = document.getElementById('cam-debug');
 const ctx = canvas.getContext('2d');
@@ -221,6 +222,22 @@ cam_debug.textContent = `cam(${camera.x}, ${camera.y})`;
 const task_form = document.getElementById('task-form');
 const task_title = document.getElementById('task-title');
 const task_description = document.getElementById('task-description');
+
+remove_button.addEventListener('click', async function () {
+  try {
+    const response = await fetch(`api/boards/${board_id}/cells?row=${selected.row}&col=${selected.col}`, {
+      method: 'DELETE'
+    });
+
+    if (response.ok) {
+      console.log("deleted");
+      let coords = chunk_coords(selected);
+      delete chunk.get(`${coords.col}, ${coords.row}`).data[`${selected.col}, ${selected.row}`];
+    }
+  } catch (error) {
+    console.log('During delete: ', error);
+  }
+});
 
 task_form.addEventListener('submit', async function(event) {
   event.preventDefault(); // Crucial: Stop the browser's default form submission (page reload)
