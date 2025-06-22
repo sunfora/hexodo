@@ -191,8 +191,37 @@ function load_footer() {
       .task-viewer {
         flex: 1;
         border: 1px solid black;
+        border-radius: 5px;
         margin: 0 2em;
         padding: 1em;
+      }
+      #task-form {
+        border: 1px solid black;
+        margin-top: 1em;
+        padding: 1em;
+        h2 {
+          font-family: monospace;
+        }
+        label {
+          font-size: 16px;
+          font-family: "Helvetia Neue", Arial, sans-serif;
+          font-style: italic;
+          color: grey;
+        }
+        input {
+          width: 100%;
+          border: none;
+          font-size: 16px;
+          font-family: "Helvetia Neue", Arial, sans-serif;
+          font-weight: bold;
+          margin-bottom: 2em;
+        }
+        textarea {
+          width: 100%;
+          border: none;
+          font-size: 16px;
+          font-family: "Helvetia Neue", Arial, sans-serif;
+        }
       }
       footer {
         position: absolute;
