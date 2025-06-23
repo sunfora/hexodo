@@ -12,12 +12,18 @@ $board_id  =   (int) $_GET['board_id'];
 try {
   $select_cards = $db->prepare(
     <<<SQL
-      SELECT cell_row, cell_col, task_id FROM cells
-        WHERE cell_row >= :chunk_row_start AND 
-              cell_row <  :chunk_row_end   AND
-              cell_col >= :chunk_col_start AND
-              cell_col <  :chunk_col_end   AND
-              board_id = :board_id
+      SELECT c.cell_row, c.cell_col, c.task_id, t.task_completed 
+      FROM 
+        cells AS c 
+      LEFT JOIN 
+        tasks AS t
+      ON 
+        c.task_id = t.task_id
+      WHERE c.cell_row >= :chunk_row_start AND 
+            c.cell_row <  :chunk_row_end   AND
+            c.cell_col >= :chunk_col_start AND
+            c.cell_col <  :chunk_col_end   AND
+            c.board_id = :board_id
     SQL
   );
 
@@ -30,6 +36,10 @@ try {
   ]);
 
   $cards = $select_cards->fetchAll(PDO::FETCH_ASSOC);
+  foreach ($cards as &$card) {
+    $card['task_completed'] = (bool) $card['task_completed'];
+  }
+  unset($card);
 
   http_response_code(200);
   echo json_encode($cards);

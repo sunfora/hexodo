@@ -187,7 +187,7 @@ class Camera {
 
 let size = 30
 
-let underCursor = {
+let under_cursor = {
   row : 0,
   col : 0,
   time: 0
@@ -198,13 +198,23 @@ let selected = {
   col : 0,
 }
 
+const title = document.querySelector('#task-title');
+const description = document.querySelector('#task-description');
+const header = document.querySelector('#task-form-header');
+const completed = document.querySelector('#task-completed');
+
 function update_form(header_message) {
-  let title = document.querySelector('#task-title');
-  let description = document.querySelector('#task-description');
-  let header = document.querySelector('#task-form-header');
   title.value = selected.title;
   description.value = selected.description;
+  description.value = selected.description;
+  completed.checked = selected.completed;
   header.textContent = header_message;
+}
+
+function update_selected() {
+  selected.title = title.value;
+  selected.description = description.value;
+  selected.completed = completed.checked;
 }
 
 let camera = {
@@ -233,22 +243,25 @@ remove_button.addEventListener('click', async function () {
       console.log("deleted");
       let coords = chunk_coords(selected);
       delete chunk.get(`${coords.col}, ${coords.row}`).data[`${selected.col}, ${selected.row}`];
+      form_new_task();
     }
   } catch (error) {
     console.log('During delete: ', error);
   }
 });
 
+task_form.addEventListener('change', update_selected);
+
 task_form.addEventListener('submit', async function(event) {
   event.preventDefault(); // Crucial: Stop the browser's default form submission (page reload)
 
-  const formData = new URLSearchParams();
+  const form_data = new URLSearchParams();
 
-  formData.append('task_description', task_description.value);
-  formData.append('task_title', task_title.value);
-  formData.append('task_id', selected.id);
-  formData.append('task_completed', selected.completed);
-  formData.append('user_id', user_name); 
+  form_data.append('task_description', selected.description);
+  form_data.append('task_title', selected.title);
+  form_data.append('task_id', selected.id);
+  form_data.append('task_completed', selected.completed);
+  form_data.append('user_id', user_name); 
 
   try {
       const response = await fetch(`/api/boards/${board_id}/cells?row=${selected.row}&col=${selected.col}`, {
@@ -256,20 +269,19 @@ task_form.addEventListener('submit', async function(event) {
           headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
           },
-          body: formData.toString()
+          body: form_data.toString()
       });
 
       // PHP will still likely respond with JSON, so parse it
       console.log(response)
       const data = await response.json();
       if (response.ok) {
-        selected.title = data.task_title;
-        selected.id = data.task_id;
-        selected.description = data.task_description;
-        selected.completed = data.task_completed;
-        update_form(`Edit task ${selected.id}`);
+        update_form_with_new_data(data);
         let coords = chunk_coords(selected);
-        chunk.get(`${coords.col}, ${coords.row}`).data[`${selected.col}, ${selected.row}`] = selected.id
+        chunk.get(`${coords.col}, ${coords.row}`).data[`${selected.col}, ${selected.row}`] = {
+          'id': selected.id,
+          'completed': selected.completed
+        }
       }
   } catch (error) {
       console.error('Fetch error:', error);
@@ -297,19 +309,55 @@ canvas.addEventListener('mousemove', (event) => {
   let global_x = camera.x - (canvas_x - event.clientX + canvas.width / 2) / size
   let global_y = camera.y - (canvas_y - event.clientY + canvas.height / 2) / size
   let hex = cube_to_oddq(cube_round(pixToHex(global_x, global_y)))
-  if (!(hex.col === underCursor.col && hex.row === underCursor.row)) {
-    underCursor.row = hex.row
-    underCursor.col = hex.col
-    underCursor.time = Date.now()
+  if (!(hex.col === under_cursor.col && hex.row === under_cursor.row)) {
+    under_cursor.row = hex.row
+    under_cursor.col = hex.col
+    under_cursor.time = Date.now()
   }
 });
 
+function stub_task() {
+  return {
+    'id': null,
+    'title': 'New task',
+    'description': 'description',
+    'completed': false
+  };
+}
+
+function form_new_task() {
+  copy_task_to(stub_task(), selected);
+  update_form('Create task');
+}
+
+function copy_task_to(src, dest) {
+  dest.title       = src.title;
+  dest.id          = src.id;
+  dest.description = src.description;
+  dest.completed   = src.completed;
+}
+
+function form_edit_task(task) {
+  copy_task_to(task, selected);
+  update_form(`Edit task: ${selected.id}`);
+}
+
+function update_form_with_new_data(backend_data) {
+  if (backend_data === null) {
+    form_new_task();
+  } else {
+    form_edit_task({
+      'title':       backend_data.task_title,
+      'id':          backend_data.task_id,
+      'description': backend_data.task_description,
+      'completed':   backend_data.task_completed
+    });
+  }
+}
 
 const retrieve_current = (event) => {
-  let task_viewer = document.querySelector('.task-viewer');
-
-  selected.row = underCursor.row
-  selected.col = underCursor.col
+  selected.row = under_cursor.row
+  selected.col = under_cursor.col
 
   fetch(`api/boards/${board_id}/cells?row=${selected.row}&col=${selected.col}`)
     .then(response => {
@@ -320,22 +368,7 @@ const retrieve_current = (event) => {
       // Parse the JSON response
       return response.json();
     })
-    .then( (data) => {
-      // Work with the data
-      if (data === null) {
-        selected.id = null;
-        selected.title = 'New task';
-        selected.description = 'description';
-        selected.completed = false;
-        update_form('Create task');
-      } else {
-        selected.title = data.task_title;
-        selected.id = data.task_id;
-        selected.description = data.task_description;
-        selected.completed = data.task_completed;
-        update_form(`Edit task: ${selected.id}`);
-      }
-    })
+    .then(update_form_with_new_data)
     .catch(error => {
       // Handle any errors that occurred during the fetch
       console.error('There was a problem with the fetch operation:', error);
@@ -398,7 +431,7 @@ function oddq_to_cube(hex) {
   return {q: q, r: r, s: -(q + r)}
 }
 
-function hexToPix(hex) {
+function hex_to_pix(hex) {
   // hex to cartesian
   let x = (     3./2 * hex.q                    )
   let y = (Math.sqrt(3)/2 * hex.q  +  Math.sqrt(3) * hex.r)
@@ -445,7 +478,10 @@ function from_chunk(hex) {
     }).then((data) => {
       let result = {}
       for (const point of data) {
-        result[`${point.cell_col}, ${point.cell_row}`] = point.task_id
+        result[`${point.cell_col}, ${point.cell_row}`] = {
+          'id': point.task_id,
+          'completed': point.task_completed
+        }
       }
       chunk.get(key).data = result
       console.log(result);
@@ -459,7 +495,7 @@ function from_chunk(hex) {
   }
 }
 
-function drawGrid() {
+function draw_grid() {
   let corner_x = camera.x - ((canvas.width / 2) / size);
   let corner_y = camera.y - ((canvas.height/ 2) / size);
 
@@ -467,7 +503,7 @@ function drawGrid() {
   let hex = cube_to_oddq(cube);
    
   const pos = () => {
-    let global = hexToPix(oddq_to_cube(hex));
+    let global = hex_to_pix(oddq_to_cube(hex));
     return {x: (global.x - corner_x) * size,
             y: (global.y - corner_y) * size}
   }
@@ -493,25 +529,53 @@ function drawGrid() {
     let col_start = hex.col
     for (; pos().x - 2 * size < canvas.width; hex.col += 1) {
       ctx.translate(pos().x, pos().y)
+
       let value = from_chunk(hex);
-      if (hex.row === underCursor.row && hex.col === underCursor.col) {
-        let nt = Math.min(Date.now() - underCursor.time, HIGHLIGHT_DURATION) / HIGHLIGHT_DURATION;
+      let below, left, right;
+
+      if (hex.col & 1) {
+        below = from_chunk({'col': hex.col, 'row': hex.row + 1});
+        left  = from_chunk({'col': hex.col - 1, 'row': hex.row + 1});
+        right = from_chunk({'col': hex.col + 1, 'row': hex.row + 1});
+      } else {
+        below = from_chunk({'col': hex.col, 'row': hex.row + 1});
+        left  = from_chunk({'col': hex.col - 1, 'row': hex.row});
+        right = from_chunk({'col': hex.col + 1, 'row': hex.row});
+      }
+
+      let all_loaded = value !== null
+                    && below !== null
+                    && left  !== null
+                    && right !== null;
+
+      if (hex.row === under_cursor.row && hex.col === under_cursor.col) {
+        let nt = Math.min(Date.now() - under_cursor.time, HIGHLIGHT_DURATION) / HIGHLIGHT_DURATION;
         const r = Math.round(lerp(START_COLOR.r, END_COLOR.r, nt));
         const g = Math.round(lerp(START_COLOR.g, END_COLOR.g, nt));
         const b = Math.round(lerp(START_COLOR.b, END_COLOR.b, nt));
-        drawHexagon(`${hex.col} ${hex.row}`, `rgb(${r}, ${g}, ${b})`)
+        draw_hexagon(`${hex.col} ${hex.row}`, `rgb(${r}, ${g}, ${b})`)
       } else if (hex.row === selected.row && hex.col === selected.col) {
         let nt = Math.abs(Math.sin(Date.now() / 500));
         const r = Math.round(lerp(FLICKERING_COLOR_START.r, FLICKERING_COLOR_END.r, nt));
         const g = Math.round(lerp(FLICKERING_COLOR_START.g, FLICKERING_COLOR_END.g, nt));
         const b = Math.round(lerp(FLICKERING_COLOR_START.b, FLICKERING_COLOR_END.b, nt));
-        drawHexagon(`${hex.col} ${hex.row}`, `rgb(${r}, ${g}, ${b})`)
-      } else if (value) {
-        drawHexagon(`${hex.col} ${hex.row}`, 'orange')
-      } else if (value !== null) {
-        drawHexagon(`${hex.col} ${hex.row}`)
+        draw_hexagon(`${hex.col} ${hex.row}`, `rgb(${r}, ${g}, ${b})`)
+      } else if (all_loaded) {
+        let unlocked = (below === undefined  || below.completed)
+                    && (left  === undefined  || left.completed )
+                    && (right === undefined  || right.completed);
+
+        if (value === undefined) {
+          draw_hexagon(`${hex.col} ${hex.row}`);
+        } else if (value.completed) {
+          draw_hexagon(`${hex.col} ${hex.row}`, '#B0C4B6')
+        } else if (unlocked) {
+          draw_hexagon(`${hex.col} ${hex.row}`, 'orange');
+        } else {
+          draw_hexagon(`${hex.col} ${hex.row}`, '#AF9D9A')
+        }
       } else {
-        drawHexagon(`${hex.col} ${hex.row}`, 'grey')
+        draw_hexagon(`${hex.col} ${hex.row}`, 'grey')
       }
       ctx.translate(-pos().x, -pos().y);
     }
@@ -519,7 +583,7 @@ function drawGrid() {
   }
 }
 
-function drawHexagon(text="lol", style='transparent') {
+function draw_hexagon(text="lol", style='transparent') {
   ctx.save()
 
   ctx.strokeStyle = 'black';
@@ -546,18 +610,18 @@ function drawHexagon(text="lol", style='transparent') {
   ctx.restore();
 }
 
-function drawAnimationFrame() {
+function draw_animation_frame() {
   canvas.width = canvas.clientWidth;
   canvas.height = canvas.clientHeight;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  drawGrid();
+  draw_grid();
 }
 let canvasFrame = null;
 function loop() {
   if (canvasFrame) {
     cancelAnimationFrame(canvasFrame);
   }
-  drawAnimationFrame();
+  draw_animation_frame();
   canvasFrame = requestAnimationFrame(loop);
 }
 

@@ -59,6 +59,7 @@ function load_his_tasks() {
         <label for="task-description">Task Description:</label>
         <br>
         <textarea id="task-description" name="task-description" rows="8"></textarea>
+        <input id="task-completed" name="task-completed" type="checkbox"/>
 
         <br>
         <button type="submit">Save Changes</button>
@@ -208,7 +209,7 @@ function load_footer() {
           font-style: italic;
           color: grey;
         }
-        input {
+        input[type='text'] {
           width: 100%;
           border: none;
           font-size: 16px;
