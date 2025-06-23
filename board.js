@@ -513,17 +513,32 @@ function draw_grid() {
     hex.row -= 1;
     hex.col -= 1;
   }
+  
+  const EMPTY    = { r: 255, g: 255, b: 255 }; // white
+  const SELECTED = { r: 255, g: 215, b: 0   }; // gold
+  const DONE     = { r: 176, g: 196, b: 182 }; // #B0C4B6
+  const TODO     = { r: 255, g: 165, b: 0   }; // orange
+  const LOCKED   = { r: 175, g: 157, b: 154 }; // #AF9D9A
+  const LOADING  = { r: 128, g: 128, b: 128 }; // grey
 
   const HIGHLIGHT_DURATION = 200;
-  const START_COLOR = { r: 255, g: 255, b: 255}; // White
-  const END_COLOR = { r: 255, g: 215, b: 0 };     // Gold (FFD700) - standard gold
-  const FLICKERING_COLOR_START = { r: 154, g: 205, b: 50 };     // Gold (FFD700) - standard gold
-  const FLICKERING_COLOR_END = { r: 154, g: 155, b: 50 }; 
 
   // Function to linearly interpolate between two values
   function lerp(start, end, t) {
     return start + t * (end - start);
   }
+
+  function lerp_color(start, end, t) {
+    const r = Math.round(lerp(start.r, end.r, t));
+    const g = Math.round(lerp(start.g, end.g, t));
+    const b = Math.round(lerp(start.b, end.b, t));
+    return {r, g, b};
+  }
+
+  function color_to_style(color) {
+    return `rgb(${color.r}, ${color.g}, ${color.b}`;
+  }
+
   cam_debug.textContent = `cam(${camera.x} ${camera.y}) ;${hex.col} ${hex.row}`;
   for (; pos().y - 2 * size < canvas.height; hex.row += 1) {
     let col_start = hex.col
@@ -543,40 +558,38 @@ function draw_grid() {
         right = from_chunk({'col': hex.col + 1, 'row': hex.row});
       }
 
+      let calculated_color;
+
       let all_loaded = value !== null
                     && below !== null
                     && left  !== null
                     && right !== null;
 
-      if (hex.row === under_cursor.row && hex.col === under_cursor.col) {
-        let nt = Math.min(Date.now() - under_cursor.time, HIGHLIGHT_DURATION) / HIGHLIGHT_DURATION;
-        const r = Math.round(lerp(START_COLOR.r, END_COLOR.r, nt));
-        const g = Math.round(lerp(START_COLOR.g, END_COLOR.g, nt));
-        const b = Math.round(lerp(START_COLOR.b, END_COLOR.b, nt));
-        draw_hexagon(`${hex.col} ${hex.row}`, `rgb(${r}, ${g}, ${b})`)
-      } else if (hex.row === selected.row && hex.col === selected.col) {
-        let nt = Math.abs(Math.sin(Date.now() / 500));
-        const r = Math.round(lerp(FLICKERING_COLOR_START.r, FLICKERING_COLOR_END.r, nt));
-        const g = Math.round(lerp(FLICKERING_COLOR_START.g, FLICKERING_COLOR_END.g, nt));
-        const b = Math.round(lerp(FLICKERING_COLOR_START.b, FLICKERING_COLOR_END.b, nt));
-        draw_hexagon(`${hex.col} ${hex.row}`, `rgb(${r}, ${g}, ${b})`)
-      } else if (all_loaded) {
+      if (all_loaded) {
         let unlocked = (below === undefined  || below.completed)
                     && (left  === undefined  || left.completed )
                     && (right === undefined  || right.completed);
-
         if (value === undefined) {
-          draw_hexagon(`${hex.col} ${hex.row}`);
+          calculated_color = EMPTY;
         } else if (value.completed) {
-          draw_hexagon(`${hex.col} ${hex.row}`, '#B0C4B6')
+          calculated_color = DONE;
         } else if (unlocked) {
-          draw_hexagon(`${hex.col} ${hex.row}`, 'orange');
+          calculated_color = TODO;
         } else {
-          draw_hexagon(`${hex.col} ${hex.row}`, '#AF9D9A')
+          calculated_color = LOCKED;
         }
       } else {
-        draw_hexagon(`${hex.col} ${hex.row}`, 'grey')
+        calculated_color = LOADING;
       }
+
+      if (hex.row === under_cursor.row && hex.col === under_cursor.col) {
+        let nt = Math.min(Date.now() - under_cursor.time, HIGHLIGHT_DURATION) / HIGHLIGHT_DURATION;
+        calculated_color = lerp_color(calculated_color, SELECTED, nt);
+      } else if (hex.row === selected.row && hex.col === selected.col) {
+        let nt = Math.abs(Math.sin(Date.now() / 500));
+        calculated_color = lerp_color(calculated_color, SELECTED, nt);
+      }         
+      draw_hexagon(`${hex.col} ${hex.row}`, color_to_style(calculated_color));
       ctx.translate(-pos().x, -pos().y);
     }
     hex.col = col_start;
