@@ -2,7 +2,21 @@
 const board_id = window.appConfig.board.board_id;
 const user_name = window.appConfig.user_id;
 
+const list_view = document.getElementById('list-view');
+
+const active_section = document.getElementById('active-section');
+const toggle_list_view = document.getElementById('toggle-list-view');
+
+const active_list = document.getElementById('active-list');
+const done_list = document.getElementById('done-list');
+const locked_list = document.getElementById('locked-list');
+
+const task_form = document.getElementById('task-form');
+const task_title = document.getElementById('task-title');
+const task_description = document.getElementById('task-description');
+
 const remove_button = document.getElementById('remove-button');
+
 const canvas = document.getElementById('hex-grid');
 const cam_debug = document.getElementById('cam-debug');
 const ctx = canvas.getContext('2d');
@@ -185,6 +199,110 @@ class Camera {
   }
 }
 
+let done = [];
+let locked = [];
+let active = [];
+
+/**
+ * @param {array} new_array - update with
+ */
+function array_changed(old_array, new_array) {
+  if (new_array.length !== old_array.length) {
+    return true;
+  }
+  for (const old_elem of old_array) {
+    let has = false;
+    for (const new_elem of new_array) {
+      if (
+        new_elem.title === old_elem.title 
+     && new_elem.col === old_elem.col
+     && new_elem.row === old_elem.row 
+      ) {
+        has = true;
+        break;
+      }
+    }
+    if (!has) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function toggle_list_with_editor() {
+  if (list_view.hasAttribute('hidden')) {
+    task_form.setAttribute('hidden', '');
+    list_view.removeAttribute('hidden');
+    toggle_list_view.textContent = 'edit selected';
+    requestAnimationFrame(() => {
+      let t = list_view.querySelector(`[data-col="${selected.col}"][data-row="${selected.row}"]`);
+      if (t) {
+        t.classList.add('selected');
+        t.scrollIntoView();
+      }
+    });
+  } else {
+    task_form.removeAttribute('hidden');
+    list_view.setAttribute('hidden', '');
+    toggle_list_view.textContent = 'list view';
+  }
+}
+
+toggle_list_view.addEventListener('click', toggle_list_with_editor);
+
+list_view.addEventListener('click', (event) => {
+  if (event.target.tagName === 'LI') {
+    let col = parseInt(event.target.getAttribute('data-col'));
+    let row = parseInt(event.target.getAttribute('data-row'));
+    let hex = {col: col, row: row};
+    let pos = hex_to_pix(oddq_to_cube(hex));
+    camera.x = pos.x;
+    camera.y = pos.y;
+    retrieve_current(null, hex);
+  }
+});
+
+function update_list(elem_list, old_list, new_list) {
+  if (array_changed(old_list, new_list)) {
+    elem_list.textContent = ""; 
+    for (const elem of new_list) {
+      const listItem = document.createElement('li');
+      listItem.textContent = elem.title; 
+      listItem.setAttribute('data-col', elem.col);
+      listItem.setAttribute('data-row', elem.row);
+      elem_list.appendChild(listItem);
+    }
+    return true;
+  }
+  return false;
+}
+
+function update_lists(new_active, new_done, new_locked) {
+  if (list_view.hasAttribute('hidden')) {
+    return;
+  }
+  if (update_list(active_list, active, new_active)) {
+    active = new_active;
+  }
+  if (update_list(done_list, done, new_done)) {
+    done = new_done;
+  }
+  if (update_list(locked_list, locked, new_locked)) {
+    locked = new_locked;
+  }
+
+  let t = list_view.querySelector(`[data-col="${selected.col}"][data-row="${selected.row}"]`);
+  if (t) {
+    t.classList.add('selected');
+  }
+}
+
+function update_active_list(new_list) {
+  if (array_changed(active, new_list)) {
+    active_list.textContent = "";
+  }
+}
+
 let size = 30
 
 let under_cursor = {
@@ -229,9 +347,6 @@ let camera = {
 
 cam_debug.textContent = `cam(${camera.x}, ${camera.y})`;
 
-const task_form = document.getElementById('task-form');
-const task_title = document.getElementById('task-title');
-const task_description = document.getElementById('task-description');
 
 remove_button.addEventListener('click', async function () {
   try {
@@ -355,9 +470,14 @@ function update_form_with_new_data(backend_data) {
   }
 }
 
-const retrieve_current = (event) => {
-  selected.row = under_cursor.row
-  selected.col = under_cursor.col
+const retrieve_current = (event, current = under_cursor) => {
+  let t = list_view.querySelector(`[data-col="${selected.col}"][data-row="${selected.row}"]`)
+  if (t) {
+    t.classList.remove('selected');
+  }
+  selected.row = current.row
+  selected.col = current.col
+  selected.time = Date.now();
 
   fetch(`api/boards/${board_id}/cells?row=${selected.row}&col=${selected.col}`)
     .then(response => {
@@ -369,6 +489,13 @@ const retrieve_current = (event) => {
       return response.json();
     })
     .then(update_form_with_new_data)
+    .then(() => {
+      t = list_view.querySelector(`[data-col="${selected.col}"][data-row="${selected.row}"]`);
+      if (t) {
+        t.classList.add('selected');
+        t.scrollIntoView();
+      }
+    })
     .catch(error => {
       // Handle any errors that occurred during the fetch
       console.error('There was a problem with the fetch operation:', error);
@@ -480,7 +607,10 @@ function from_chunk(hex) {
       for (const point of data) {
         result[`${point.cell_col}, ${point.cell_row}`] = {
           'id': point.task_id,
-          'completed': point.task_completed
+          'completed': point.task_completed,
+          'title': point.task_title,
+          'col': point.cell_col,
+          'row': point.cell_row
         }
       }
       chunk.get(key).data = result
@@ -540,6 +670,11 @@ function draw_grid() {
   }
 
   cam_debug.textContent = `cam(${camera.x} ${camera.y}) ;${hex.col} ${hex.row}`;
+
+  let new_active = [];
+  let new_done = [];
+  let new_locked = [];
+
   for (; pos().y - 2 * size < canvas.height; hex.row += 1) {
     let col_start = hex.col
     for (; pos().x - 2 * size < canvas.width; hex.col += 1) {
@@ -573,15 +708,18 @@ function draw_grid() {
           calculated_color = EMPTY;
         } else if (value.completed) {
           calculated_color = DONE;
+          new_done.push(value);
         } else if (unlocked) {
           calculated_color = TODO;
+          new_active.push(value);
         } else {
           calculated_color = LOCKED;
+          new_locked.push(value);
         }
       } else {
         calculated_color = LOADING;
       }
-
+      
       if (hex.row === under_cursor.row && hex.col === under_cursor.col) {
         let nt = Math.min(Date.now() - under_cursor.time, HIGHLIGHT_DURATION) / HIGHLIGHT_DURATION;
         calculated_color = lerp_color(calculated_color, SELECTED, nt);
@@ -594,6 +732,7 @@ function draw_grid() {
     }
     hex.col = col_start;
   }
+  update_lists(new_active, new_done, new_locked);
 }
 
 function draw_hexagon(text="lol", style='transparent') {

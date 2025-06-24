@@ -49,7 +49,19 @@ function load_his_tasks() {
       </canvas>
     </div>
     <div class="task-viewer">
+    <button id="toggle-list-view"> list view </button>
     <button id="remove-button"> remove task from cell </button>
+    <section id="list-view" hidden>
+      <section id="active-section">
+          <ul id="active-list"></ul>
+      </section>
+      <section id="done-section">
+          <ul id="done-list"></ul>
+      </section>
+      <section id="locked-section">
+          <ul id="locked-list"></ul>
+      </section>
+    </section>
     <form id="task-form">
         <h2 id="task-form-header">Loading Task...</h2>
         <label for="task-title">Task Title:</label>
@@ -145,7 +157,51 @@ function load_footer() {
 <html>
   <head>
     <style>
-      
+       
+      #list-view {
+        padding: 1em;
+        margin: 1em 0;
+        background: #1c252a;
+        .selected {
+          color: gold !important;
+          text-decoration: underline;
+        }
+        max-height: 60vh;
+        overflow: scroll;
+        scroll-snap-type: x mandatory;
+        #active-list li {
+          color: orange;
+        }
+        #done-list li {
+          color: #B0C4B6;
+        }
+        #locked-list li {
+          color: #AF9D9A;
+        }
+
+        section {
+          width: 100%;
+          flex: none;
+          scroll-snap-align: center; 
+          scroll-snap-stop: always;
+        }
+        h2 {
+          font-size: 16px;
+        }
+        ul {
+          margin: 0;
+          list-style: none;
+          padding: 0;
+          width: 100%;
+          li {
+            font-size: 14px;
+            cursor: pointer;
+            padding: 1em;
+            font-family: "Helvetia Neue", Arial, sans-serif;
+            font-weight: bold;
+          }
+        }
+      }
       #here {
         font-weight: bold;  
       }
@@ -190,6 +246,7 @@ function load_footer() {
         width: 100vw;
       }
       .task-viewer {
+        background: #1c252a;
         flex: 1;
         border: 1px solid black;
         border-radius: 5px;
@@ -197,6 +254,7 @@ function load_footer() {
         padding: 1em;
       }
       #task-form {
+        background: white;
         border: 1px solid black;
         margin-top: 1em;
         padding: 1em;

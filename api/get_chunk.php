@@ -12,7 +12,7 @@ $board_id  =   (int) $_GET['board_id'];
 try {
   $select_cards = $db->prepare(
     <<<SQL
-      SELECT c.cell_row, c.cell_col, c.task_id, t.task_completed 
+      SELECT c.cell_row, c.cell_col, c.task_id, t.task_completed, t.task_title 
       FROM 
         cells AS c 
       LEFT JOIN 
