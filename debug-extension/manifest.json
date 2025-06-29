@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Debugger Visualizer (Popout)",
+  "version": "1.0",
+  "description": "A custom DevTools panel that can open a separate debugger control window.",
+  "icons": {
+    "48": "icons/visualizer-48.png"
+  },
+  "devtools_page": "devtools/devtools-page.html",
+  "permissions": [
+    "activeTab",
+    "debugger",
+    "windows" 
+  ]
+}

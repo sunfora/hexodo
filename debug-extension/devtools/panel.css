@@ -1,0 +1,63 @@
+/* devtools/panel.css */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f0f0f0;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+h1 {
+    color: #0056b3;
+}
+
+button {
+    padding: 10px 20px;
+    margin: 10px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+button:hover:not(:disabled) {
+    background-color: #0056b3;
+}
+
+button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.status {
+    padding: 10px;
+    margin-top: 15px;
+    border-radius: 5px;
+    font-weight: bold;
+}
+
+.status.info {
+    background-color: #e0f7fa;
+    color: #007bff;
+}
+
+.status.warning {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.status.success {
+    background-color: #d4edda;
+    color: #28a745;
+}
+
+.status.error {
+    background-color: #f8d7da;
+    color: #dc3545;
+}

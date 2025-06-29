@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Debugger Visualizer Window</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <h1>Debugger Controls & Watchers</h1>
+    <div class="controls">
+      <button id="step-over-btn" title="Step Over (F10)">N (Step Over)</button>
+      <button id="step-into-btn" title="Step Into (F11)">I (Step Into)</button>
+      <button id="step-out-btn" title="Step Out (Shift+F11)">O (Step Out)</button>
+      <button id="resume-btn" title="Resume Execution (F8)">R (Resume)</button>
+      <button id="pause-btn" title="P (Pause)">P (Pause)</button>
+    </div>
+  </div>
+
+  <div id="status" class="status">Connecting to debugger backend...</div>
+
+  <div class="main-content">
+    <div class="panel-section visualization-area">
+      <h2>Visualization</h2>
+      <canvas id="visualCanvas"></canvas>
+      <div id="scope-display-container">
+        <h3>Current Scopes:</h3>
+        <div id="scope-display">No scope data available.</div>
+      </div>
+    </div>
+
+    <div class="panel-section watchers-area">
+      <h2>Watch Expressions</h2>
+      <div class="watch-input-container">
+        <input type="text" id="watch-expression-input" placeholder="e.g., myVar, obj.prop, canvas.width">
+        <button id="add-watch-btn">Add Watch</button>
+      </div>
+      <div id="watched-expressions-display">
+        <p>No watch expressions added.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
