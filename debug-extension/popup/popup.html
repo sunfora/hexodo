@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <title>Debugger Visualizer Window</title>
   <link rel="stylesheet" href="popup.css">
+  <script src="../components/dwindow/d-window.js" type=module> </script>
 </head>
 <body>
   <div class="header">
@@ -22,7 +23,9 @@
   <div class="main-content">
     <div class="panel-section visualization-area">
       <h2>Visualization</h2>
-      <canvas id="visualCanvas"></canvas>
+      <dwindow>
+        <canvas id="visualCanvas"></canvas>
+      </dwindow>
       <div id="scope-display-container">
         <h3>Current Scopes:</h3>
         <div id="scope-display">No scope data available.</div>
