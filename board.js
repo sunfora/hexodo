@@ -1,4 +1,20 @@
+import {
+  oddq_to_cube, 
+  cube_to_oddq, 
+  cube_round,
+  vec2_to_cube,
+  cube_to_vec2,
+  xy_to_cube,
+  xy_nearest_oddq,
+  oddq_to_vec2,
+  HexCube, 
+  HexOddQ,
+  Vec2
+} from "./coords.js";
+
 "use strict" 
+
+
 const board_id = window.appConfig.board.board_id;
 const user_name = window.appConfig.user_id;
 
@@ -20,6 +36,11 @@ const remove_button = document.getElementById('remove-button');
 const canvas = document.getElementById('hex-grid');
 const cam_debug = document.getElementById('cam-debug');
 const ctx = canvas.getContext('2d');
+
+const title = document.querySelector('#task-title');
+const description = document.querySelector('#task-description');
+const header = document.querySelector('#task-form-header');
+const completed = document.querySelector('#task-completed');
 
 /**
  * Usage: for tracking down the visible part of the world.
@@ -234,33 +255,14 @@ function toggle_list_with_editor() {
     task_form.setAttribute('hidden', '');
     list_view.removeAttribute('hidden');
     toggle_list_view.textContent = 'edit selected';
-    requestAnimationFrame(() => {
-      let t = list_view.querySelector(`[data-col="${selected.col}"][data-row="${selected.row}"]`);
-      if (t) {
-        t.classList.add('selected');
-        t.scrollIntoView();
-      }
-    });
+    return 'list-view';
   } else {
     task_form.removeAttribute('hidden');
     list_view.setAttribute('hidden', '');
     toggle_list_view.textContent = 'list view';
+    return 'editor';
   }
 }
-
-toggle_list_view.addEventListener('click', toggle_list_with_editor);
-
-list_view.addEventListener('click', (event) => {
-  if (event.target.tagName === 'LI') {
-    let col = parseInt(event.target.getAttribute('data-col'));
-    let row = parseInt(event.target.getAttribute('data-row'));
-    let hex = {col: col, row: row};
-    let pos = hex_to_pix(oddq_to_cube(hex));
-    camera.x = pos.x;
-    camera.y = pos.y;
-    retrieve_current(null, hex);
-  }
-});
 
 function update_list(elem_list, old_list, new_list) {
   if (array_changed(old_list, new_list)) {
@@ -290,11 +292,6 @@ function update_lists(new_active, new_done, new_locked) {
   if (update_list(locked_list, locked, new_locked)) {
     locked = new_locked;
   }
-
-  let t = list_view.querySelector(`[data-col="${selected.col}"][data-row="${selected.row}"]`);
-  if (t) {
-    t.classList.add('selected');
-  }
 }
 
 function update_active_list(new_list) {
@@ -306,20 +303,13 @@ function update_active_list(new_list) {
 let size = 30
 
 let under_cursor = {
-  row : 0,
-  col : 0,
+  hex: new HexOddQ(0, 0),
   time: 0
 }
 
 let selected = {
-  row : 0,
-  col : 0,
+  hex: new HexOddQ(0, 0),
 }
-
-const title = document.querySelector('#task-title');
-const description = document.querySelector('#task-description');
-const header = document.querySelector('#task-form-header');
-const completed = document.querySelector('#task-completed');
 
 function update_form(header_message) {
   title.value = selected.title;
@@ -345,91 +335,24 @@ let camera = {
   moving: false
 };
 
-cam_debug.textContent = `cam(${camera.x}, ${camera.y})`;
-
-
-remove_button.addEventListener('click', async function () {
-  try {
-    const response = await fetch(`api/boards/${board_id}/cells?row=${selected.row}&col=${selected.col}`, {
-      method: 'DELETE'
-    });
-
-    if (response.ok) {
-      console.log("deleted");
-      let coords = chunk_coords(selected);
-      delete chunk.get(`${coords.col}, ${coords.row}`).data[`${selected.col}, ${selected.row}`];
-      form_new_task();
-    }
-  } catch (error) {
-    console.log('During delete: ', error);
+const cam_debug_handler = {
+  set: function(target, property, reciever) {
+    cam_debug.textContent = `cam(${target.x}, ${target.y})`;
+    return Reflect.set(target, property, reciever);
   }
-});
+}
+camera = new Proxy(camera, cam_debug_handler);
 
-task_form.addEventListener('change', update_selected);
 
-task_form.addEventListener('submit', async function(event) {
-  event.preventDefault(); // Crucial: Stop the browser's default form submission (page reload)
 
-  const form_data = new URLSearchParams();
-
-  form_data.append('task_description', selected.description);
-  form_data.append('task_title', selected.title);
-  form_data.append('task_id', selected.id);
-  form_data.append('task_completed', selected.completed);
-  form_data.append('user_id', user_name); 
-
-  try {
-      const response = await fetch(`/api/boards/${board_id}/cells?row=${selected.row}&col=${selected.col}`, {
-          method: 'POST', 
-          headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: form_data.toString()
-      });
-
-      // PHP will still likely respond with JSON, so parse it
-      console.log(response)
-      const data = await response.json();
-      if (response.ok) {
-        update_form_with_new_data(data);
-        let coords = chunk_coords(selected);
-        chunk.get(`${coords.col}, ${coords.row}`).data[`${selected.col}, ${selected.row}`] = {
-          'id': selected.id,
-          'completed': selected.completed
-        }
-      }
-  } catch (error) {
-      console.error('Fetch error:', error);
+async function request_cell_remove(which) {
+  const response = await fetch(`api/boards/${board_id}/cells?row=${which.row}&col=${which.col}`, {
+    method: 'DELETE'
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
   }
-});
-
-canvas.addEventListener('mousedown', (event) => {
-  if (event.target === event.currentTarget) {
-    camera.moving = true
-    camera.pageX = event.pageX;
-    camera.pageY = event.pageY;
-    camera.savedX = camera.x;
-    camera.savedY = camera.y;
-  }
-});
-
-canvas.addEventListener('mousemove', (event) => {
-  if (camera.moving) {
-    camera.x = camera.savedX +  (camera.pageX - event.pageX) / size
-    camera.y = camera.savedY +  (camera.pageY - event.pageY) / size
-    
-    cam_debug.textContent = `cam(${camera.x}, ${camera.y})`;
-  }
-  let {x: canvas_x, y: canvas_y} = canvas.getBoundingClientRect();
-  let global_x = camera.x - (canvas_x - event.clientX + canvas.width / 2) / size
-  let global_y = camera.y - (canvas_y - event.clientY + canvas.height / 2) / size
-  let hex = cube_to_oddq(cube_round(pixToHex(global_x, global_y)))
-  if (!(hex.col === under_cursor.col && hex.row === under_cursor.row)) {
-    under_cursor.row = hex.row
-    under_cursor.col = hex.col
-    under_cursor.time = Date.now()
-  }
-});
+}
 
 function stub_task() {
   return {
@@ -457,116 +380,46 @@ function form_edit_task(task) {
   update_form(`Edit task: ${selected.id}`);
 }
 
+function task_from_backend(backend_data) {
+  return {
+    'title':       backend_data.task_title,
+    'id':          backend_data.task_id,
+    'description': backend_data.task_description,
+    'completed':   backend_data.task_completed
+  };
+}
+
+function update_form_with_new_task(task) {
+  if (task === null) {
+    form_new_task();
+  } else {
+    form_edit_task(task);
+  }
+  
+}
+
 function update_form_with_new_data(backend_data) {
   if (backend_data === null) {
     form_new_task();
   } else {
-    form_edit_task({
-      'title':       backend_data.task_title,
-      'id':          backend_data.task_id,
-      'description': backend_data.task_description,
-      'completed':   backend_data.task_completed
-    });
+    form_edit_task(task_from_backend(backend_data));
   }
 }
 
-const retrieve_current = (event, current = under_cursor) => {
-  let t = list_view.querySelector(`[data-col="${selected.col}"][data-row="${selected.row}"]`)
-  if (t) {
-    t.classList.remove('selected');
+async function request_hex(hex) {
+  try {
+    let response = await fetch(`api/boards/${board_id}/cells?row=${hex.row}&col=${hex.col}`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    let data = await response.json();
+    return data === null? null : task_from_backend(data);
+  } catch (error) {
+    console.log('during request_hex: ', error);
   }
-  selected.row = current.row
-  selected.col = current.col
-  selected.time = Date.now();
-
-  fetch(`api/boards/${board_id}/cells?row=${selected.row}&col=${selected.col}`)
-    .then(response => {
-      // Check if the request was successful (status code 200-299)
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      // Parse the JSON response
-      return response.json();
-    })
-    .then(update_form_with_new_data)
-    .then(() => {
-      t = list_view.querySelector(`[data-col="${selected.col}"][data-row="${selected.row}"]`);
-      if (t) {
-        t.classList.add('selected');
-        t.scrollIntoView();
-      }
-    })
-    .catch(error => {
-      // Handle any errors that occurred during the fetch
-      console.error('There was a problem with the fetch operation:', error);
-    });
-};
-canvas.addEventListener('dblclick', retrieve_current);
-
-document.addEventListener('mouseup', (event) => {
-  if (camera.moving) {
-    camera.moving= false;
-    camera.x = camera.savedX +  (camera.pageX - event.pageX) / size
-    camera.y = camera.savedY +  (camera.pageY - event.pageY) / size
-  }
-});
-
-canvas.addEventListener('wheel', (event) => {
-  event.preventDefault()
-  size += event.wheelDelta / 100
-});
-
-
-function cube_round(hex) {
-  let q_i = Math.round(hex.q);
-  let r_i = Math.round(hex.r);
-  let s_i = Math.round(hex.s);
-
-  let q_diff = Math.abs(q_i - hex.q);
-  let r_diff = Math.abs(r_i - hex.r);
-  let s_diff = Math.abs(s_i - hex.s);
-
-  if (q_diff > r_diff && q_diff > s_diff) {
-    q_i = -(r_i + s_i);
-  } else if (r_diff > s_diff) {
-    r_i = -(q_i + s_i);
-  } else {
-    s_i = -(q_i + r_i);
-  }
-
-  return {q: q_i, r: r_i, s: s_i};
-}
-
-function pixToHex(x, y) {
-  let q = 2 * x / 3;
-  let r = -1./3 * x + Math.sqrt(3) / 3 * y;
-
-  return {q: q, r: r, s: -(q + r)};
 }
 
 
-
-function cube_to_oddq(hex) {
-  let col = hex.q;
-  let row = hex.r + (hex.q - (hex.q&1)) / 2;
-  return {col: col, row: row};
-}
-
-function oddq_to_cube(hex) {
-  let q = hex.col;
-  let r = hex.row - (hex.col - (hex.col&1)) / 2;
-  return {q: q, r: r, s: -(q + r)}
-}
-
-function hex_to_pix(hex) {
-  // hex to cartesian
-  let x = (     3./2 * hex.q                    )
-  let y = (Math.sqrt(3)/2 * hex.q  +  Math.sqrt(3) * hex.r)
-  // scale cartesian coordinates
-  x = x 
-  y = y
-  return {x: x, y: y};
-}
 
 let chunk = new Map();
 
@@ -579,6 +432,355 @@ function chunk_coords(hex) {
 
 let requests_made = 0;
 let global_timeout = 0;
+
+/**
+ * The system responsible for handling all kind of fetches from the server.
+ * When it comes to hexes.
+ */
+class ChunkStorage {
+  /**
+   * unprocessed
+   */
+  static inbox = [];
+  
+  static cycles = 0;
+  
+  static queue = [
+    {cycles: 8,   data: []},  // 0  lod 0 near camera
+    {cycles: 16,  data: []},  // 1  lod 1 huge near camera
+    {cycles: 32,  data: []},  // 2  lod 2 minimap
+    {cycles: 64,  data: []},  // 3  individual hexes
+    {cycles: 128, data: []}   // 4  slowly load past camera
+  ];
+
+  /**
+   * Level of Details 0 (number chunks: 1x1)
+   * includes: 
+   *   - title 
+   *   - description
+   *   - completion status
+   *   - block type
+   */
+  static LOD_0 = 1;
+
+  /**
+   * Level of Details 1 (number chunks: 4x4)
+   * includes: 
+   *   - title 
+   *   - block type
+   */
+  static LOD_1 = 4;
+
+  /**
+   * Level of Details 2 (number chunks: 16x16)
+   * includes: 
+   *   - single low resolution texture
+   *   TODO(ivan): implement on server side
+   */
+  static LOD_2 = 16;
+
+  /**
+   * the size of the chunk 16 x 16 blocks
+   */
+  static CHUNK_SIZE = 16;
+
+  /**
+   * Not more than 10 individual fetches from the user.
+   */
+  static MAX_TOTAL_CONCURRENT_REQUESTS = 10;
+
+  /**
+   * Client should not exceed this number of requests per session.
+   * TODO(ivan): create strict serverside limit and return SERVER_IS_BUSY or something
+   */
+  static MAX_CHUNK_CONCURRENT_REQUESTS = 8;
+
+  /**
+   * Optimal requests to server
+   */
+  static OPT_CHUNK_CONCURRENT_REQUESTS = 4;
+
+  /**
+   * Client should not exceed this number of requests per session.
+   * TODO(ivan): create strict serverside limit and return SERVER_IS_BUSY or something
+   */
+  static MAX_CELL_CONCURRENT_REQUESTS = 4;
+
+  /**
+   * Optimal requests of individual cells to the server
+   */
+  static OPT_CELL_CONCURRENT_REQUESUT = 2;
+
+  static total_requests = 0;
+  static cell_requests = 0;
+  static chunk_requests = 0;
+  
+  // TODO(ivan): not finished
+  static queue(event) {
+    switch (event.type) {
+      case 'REQUEST_ALL_CAMERA_VISIBLE':
+        ChunkStorage.requestAllVisible(event.bounding_box);
+        break;
+      case 'CELL_REMOVE':
+        break;
+      case 'CELL_UPD':
+        break;
+    }
+  }
+    
+  /**
+   * request all visible hexes inside bounding box
+   * @param {BoundingBox} bounding_box 
+   */
+  static requestAllVisible(bounding_box) {
+    // check how many chunks 
+    // prioritize those in center
+  // TODO(ivan): not finished
+  }
+
+  static requestChunk(col, row) {
+  // TODO(ivan): not finished
+  }
+
+  static processInbox() {
+  // TODO(ivan): not finished
+    for (const action of ChunkStorage.inbox) {
+      
+    }
+  }
+
+  // TODO(ivan): not finished
+  storage = new Map();
+}
+
+/**
+ * Simple lightweight utility class for managing object pools.
+ * Usage: mostly to reuse events and other objects.
+ *
+ * NOTE(ivan): why not a class which I would then new Pool() blah blah blah.
+ *             Well... this thing is a flat thing specifically for EventBus.
+ *             And it is kinda simple stupid and good for cache.
+ *
+ * TODO(ivan): Step through this in a debugger
+ */
+class FixedPool {
+  /**
+   * Note(ivan): return from this queue if something is removed
+   */ 
+  static pool = [];
+
+  /**
+   * Registers new fixed pool. Returns id to use.
+   */
+  static register(size) {
+    pool.push(size);
+    const id = pool.length - 1;
+    for (let i = 0; i < size; ++i) {
+      pool.push(null);
+    }
+    return id;
+  }
+
+  /**
+   * Push object to a dedicated pool, returns boolean on sucess (if pool is not overflown).
+   */
+  static reuse(id, object) {
+    const size = pool[id];
+    if (size > 0) {
+      pool[id]--;
+      pool[id + size] = object;
+    } else {
+      console.error("FixedPool: pool overflow");
+    }
+  }
+
+  /**
+   * Get an object from pool or null if nothing is there.
+   */
+  static object(id) {
+    const object = pool[id + pool[id] + 1];
+    if (object !== null) {
+      pool[id]++;
+    } else {
+      console.error("FixedPool: pool underflow");
+    }
+    return object;
+  }
+}
+
+/**
+ * struct BoundingBox(minX: number, maxX: number, minY: number, maxY: number)
+ */
+class BoundingBox {
+  /**
+   * @param {number} minX
+   * @param {number} maxX
+   * @param {number} minY
+   * @param {number} maxY
+   */
+  constructor(minX, maxX, minY, maxY) {
+    this.minX = minX;
+    this.maxX = maxX;
+    this.minY = minY;
+    this.maxY = maxY;
+  }
+
+  /** 
+   * Reuse the BoundingBox.
+   * NOTE(ivan): unchecked, be sure it really is an object of proper type.
+   * @param {BoundingBox} target 
+   * 
+   * @param {number} minX
+   * @param {number} maxX
+   * @param {number} minY
+   * @param {number} maxY
+   */
+  static rec(target, minX, maxX, minY, maxY) {
+    target.minX = minX;
+    target.maxX = maxX;
+    target.minY = minY;
+    target.maxY = maxY;
+    return target;
+  }
+
+  /** 
+   * Reuse the BoundingBox or new if target is wrong type.
+   * USAGE(ivan): for object pooling and other gc lowerage
+   *
+   * @param {?BoundingBox} target 
+   *
+   * @param {number} minX
+   * @param {number} maxX
+   * @param {number} minY
+   * @param {number} maxY
+   */
+  static recOrNew(target, minX, maxX, minY, maxY) {
+    return target instanceof BoundingBox
+      ? BoundingBox.rec(target, minX, maxX, minY, maxY)
+      : new BoundingBox(minX, maxX, minY, maxY);
+  }
+
+  /** 
+   * Compare two objects 
+   * USAGE(ivan): typesafe comparasion 
+   *
+   * @param {?BoundingBox} first
+   * @param {?BoundingBox} second 
+   *
+   * @param {number} minX
+   * @param {number} maxX
+   * @param {number} minY
+   * @param {number} maxY
+   */
+  static equals(first, second) {
+    return first  instanceof BoundingBox &&
+           second instanceof BoundingBox &&
+           first.minX === second.minX &&
+           first.maxX === second.maxX &&
+           first.minY === second.minY &&
+           first.maxY === second.maxY
+  }
+
+  /** 
+   * Compares two BoundingBox structs.
+   * @param {BoundingBox} other 
+   */
+  equals(other) {
+    return other instanceof BoundingBox &&
+           this.minX === other.minX &&
+           this.maxX === other.maxX &&
+           this.minY === other.minY &&
+           this.maxY === other.maxY;
+  }
+
+  /** 
+   * Clones BoundingBox.
+   */
+  clone() {
+    const minX = this.minX;
+    const maxX = this.maxX;
+    const minY = this.minY;
+    const maxY = this.maxY
+    return new BoundingBox(minX, maxX, minY, maxY);
+  }
+
+  /** 
+   * Copies contents of this BoundingBox to other
+   * @param {BoundingBox} other
+   */
+  copy(other) {
+    const minX = this.minX;
+    const maxX = this.maxX;
+    const minY = this.minY;
+    const maxY = this.maxY
+    return BoundingBox.rec(other, minX, maxX, minY, maxY);
+  }
+
+  /**
+   * Takes two hexes (in any order) transforms them into bounding box.
+   * @param {object} hex1 in odd-q coordinates
+   * @param {object} hex2 in odd-q coordinates
+   */
+  static fromTwoHexes(hex1, hex2, target=null) {
+    const minX = Math.min(hex1.col, hex2.col);
+    const maxX = Math.max(hex1.col, hex2.col);
+    const minY = Math.min(hex1.row, hex2.row);
+    const maxY = Math.max(hex1.row, hex2.row);
+
+    return BoundingBox.recOrNew(target, minX, maxX, minY, maxY);
+  }
+}
+
+
+/**
+ * Cull the visible hexes on the screen.
+ * Usage: for rendering purposes, for fetching relevant data.
+ */
+function cull_hexes(camera, canvas, target=null) {
+  let top_left_hex;
+  let bot_right_hex;
+  {
+    const corner_x = camera.x - ((canvas.width / 2) / size);
+    const corner_y = camera.y - ((canvas.height/ 2) / size);
+    const cube = cube_round(xy_to_cube(corner_x, corner_y));
+    const oddq = cube_to_oddq(cube);
+    oddq.col -= 1;
+    oddq.row -= 1;
+    top_left_hex = oddq;
+  }
+  {
+    const corner_x = camera.x + ((canvas.width / 2) / size);
+    const corner_y = camera.y + ((canvas.height/ 2) / size);
+    const cube = cube_round(xy_to_cube(corner_x, corner_y));
+    const oddq = cube_to_oddq(cube);
+    oddq.col += 1;
+    oddq.row += 1;
+    bot_right_hex = oddq;
+  }
+
+  return BoundingBox.fromTwoHexes(top_left_hex, bot_right_hex, target);
+}
+
+/**
+ * Convert logical odd-q coordinates to actual center of the hexagon on the screen.
+ * Usage: to draw the hexagon
+ *
+ * @param {HexOddQ} hex - the hex on screen
+ * @param {?Vec2} dest - the resulting point in pixels
+ * returns {Vec2} - oddq on screen in pixels
+ */
+function oddq_on_screen(hex, camera, canvas, dest=null) {
+  const center_screen_px_x = canvas.width  / 2;
+  const center_screen_px_y = canvas.height / 2;
+  
+  const {x: hex_logical_cart_x, y: hex_logical_cart_y} = oddq_to_vec2(hex); 
+  const {x: cam_logical_cart_x, y: cam_logical_cart_y} = camera;
+
+  const hex_screen_px_x = center_screen_px_x + (hex_logical_cart_x - cam_logical_cart_x) * size;
+  const hex_screen_px_y = center_screen_px_y + (hex_logical_cart_y - cam_logical_cart_y) * size;
+
+  return Vec2.recOrNew(dest, hex_screen_px_x, hex_screen_px_y); 
+}
 
 function from_chunk(hex) {
   let pos = chunk_coords(hex);
@@ -614,7 +816,6 @@ function from_chunk(hex) {
         }
       }
       chunk.get(key).data = result
-      console.log(result);
       chunk.get(key).loaded = true;
       requests_made -= 1;
     }).catch( (error) => {
@@ -626,23 +827,7 @@ function from_chunk(hex) {
 }
 
 function draw_grid() {
-  let corner_x = camera.x - ((canvas.width / 2) / size);
-  let corner_y = camera.y - ((canvas.height/ 2) / size);
-
-  let cube = cube_round(pixToHex(corner_x, corner_y));
-  let hex = cube_to_oddq(cube);
-   
-  const pos = () => {
-    let global = hex_to_pix(oddq_to_cube(hex));
-    return {x: (global.x - corner_x) * size,
-            y: (global.y - corner_y) * size}
-  }
-
-  // search corner outside of viewport
-  while (pos().y + 2 * size > 0 || pos().x + 2 * size > 0) {
-    hex.row -= 1;
-    hex.col -= 1;
-  }
+  let bounding_box = cull_hexes(camera, canvas);
   
   const EMPTY    = { r: 255, g: 255, b: 255 }; // white
   const SELECTED = { r: 255, g: 215, b: 0   }; // gold
@@ -669,17 +854,24 @@ function draw_grid() {
     return `rgb(${color.r}, ${color.g}, ${color.b}`;
   }
 
-  cam_debug.textContent = `cam(${camera.x} ${camera.y}) ;${hex.col} ${hex.row}`;
-
   let new_active = [];
   let new_done = [];
   let new_locked = [];
+  
+  let hex = new HexOddQ(0, 0);
 
-  for (; pos().y - 2 * size < canvas.height; hex.row += 1) {
-    let col_start = hex.col
-    for (; pos().x - 2 * size < canvas.width; hex.col += 1) {
-      ctx.translate(pos().x, pos().y)
+  for (let row = bounding_box.minY; row <= bounding_box.maxY; row++) {
+    for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
+      // reuse hex
+      HexOddQ.rec(hex, col, row);
 
+      // find where to draw
+      const pos = oddq_on_screen(hex, camera, canvas);
+
+      ctx.translate(pos.x, pos.y)
+      
+      // TODO(ivan): fetching should not be there
+      //             keep it for now
       let value = from_chunk(hex);
       let below, left, right;
 
@@ -720,17 +912,18 @@ function draw_grid() {
         calculated_color = LOADING;
       }
       
-      if (hex.row === under_cursor.row && hex.col === under_cursor.col) {
+      if (hex.equals(under_cursor.hex)) {
         let nt = Math.min(Date.now() - under_cursor.time, HIGHLIGHT_DURATION) / HIGHLIGHT_DURATION;
         calculated_color = lerp_color(calculated_color, SELECTED, nt);
-      } else if (hex.row === selected.row && hex.col === selected.col) {
+      } else if (hex.equals(selected.hex)) {
         let nt = Math.abs(Math.sin(Date.now() / 500));
         calculated_color = lerp_color(calculated_color, SELECTED, nt);
       }         
       draw_hexagon(`${hex.col} ${hex.row}`, color_to_style(calculated_color));
-      ctx.translate(-pos().x, -pos().y);
+
+      // go back
+      ctx.translate(-pos.x, -pos.y);
     }
-    hex.col = col_start;
   }
   update_lists(new_active, new_done, new_locked);
 }
@@ -769,14 +962,338 @@ function draw_animation_frame() {
   draw_grid();
 }
 let canvasFrame = null;
+
+let UI_event_queue = [];
+let UI_event_frame = [];
+
+function register_event(event_type, data) {
+  const event = {type: event_type, data: data};
+  UI_event_queue.push(event);
+}
+
+function swap_event_buffers() {
+  const frame = UI_event_queue;
+  UI_event_queue = UI_event_frame;
+  UI_event_frame = frame;
+}
+
+let game = {
+  tool: 'drag',
+  running: false,
+  controller: null
+};
+
+
+async function save_selected() {
+  const form_data = new URLSearchParams();
+
+  form_data.append('task_description', selected.description);
+  form_data.append('task_title', selected.title);
+  form_data.append('task_id', selected.id);
+  form_data.append('task_completed', selected.completed);
+  form_data.append('user_id', user_name); 
+
+  const response = await fetch(`/api/boards/${board_id}/cells?row=${selected.hex.row}&col=${selected.hex.col}`, {
+      method: 'POST', 
+      headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: form_data.toString()
+  });
+
+  const data = await response.json();
+  if (response.ok) {
+    register_event()
+    update_form_with_new_data(data);
+    let coords = chunk_coords(selected.hex);
+    chunk.get(`${coords.col}, ${coords.row}`).data[`${selected.hex.col}, ${selected.hex.row}`] = {
+      'id': selected.id,
+      'completed': selected.completed
+    }
+  }
+};
+
+function wire_dom_events() {
+  if (game.controller) {
+    console.error("trying to wire to dom, while already wired");
+    return;
+  }
+
+  // register new abort controller
+  game.controller = new AbortController();
+  const signal = game.controller.signal;
+
+  //
+  // override default behaviour
+  // to simplify refactor / future additions
+  //
+  function $(parent) {
+    const child = Object.create(parent);
+    child.addEventListener = function (type, callback, options) {
+      return parent.addEventListener(type, callback, {...options, signal: signal});
+    };
+    return child;
+  }
+
+  $(canvas).addEventListener('mousedown', (event) => {
+    if (event.target === event.currentTarget) {
+      register_event('GAME_MOUSE_DOWN', {pageX: event.pageX, pageY: event.pageY});
+    }
+  });
+  $(canvas).addEventListener('focus',      () => register_event('UI_FOCUSED'      , {target: 'hexgrid'}));
+  $(canvas).addEventListener('blur',       () => register_event('UI_BLURRED'      , {target: 'hexgrid'}));
+  $(canvas).addEventListener('mouseenter', () => register_event('REQUEST_UI_FOCUS', {target: 'hexgrid'}));
+  $(canvas).addEventListener('mouseleave', () => register_event('REQUEST_UI_BLUR' , {target: 'hexgrid'}));
+  $(canvas).addEventListener('mousemove', (event) => register_event('GAME_MOUSE_MOVED', event));
+  $(canvas).addEventListener('dblclick', () => register_event('HEXAGON_SELECTED', {hex: under_cursor.hex}));
+  $(canvas).addEventListener('wheel', (event) => {
+    event.preventDefault()
+    register_event('REQUEST_CAMERA_ZOOM', {delta: event.wheelDelta});
+  });
+
+  $(document).addEventListener('mouseup', (event) => register_event('MOUSE_UP', event));
+  $(document).addEventListener('keydown', (event) => {
+    if (event.repeat) {
+        return;
+    }
+    if (event.target === canvas) {
+      register_event('GAME_KEY_PRESSED', {
+        key: event.key
+      });
+    }
+  });
+
+  $(remove_button).addEventListener('click', () => register_event('REQUEST_HEX_REMOVE', {hex: selected.hex}));
+
+  $(list_view).addEventListener('click', (event) => {
+    if (event.target.tagName === 'LI') {
+
+      let col = parseInt(event.target.getAttribute('data-col'));
+      let row = parseInt(event.target.getAttribute('data-row'));
+
+      register_event('LIST_ITEM_SELECTED', {hex: {col, row}});
+    }
+  });
+
+  $(task_form).addEventListener('change', () => register_event('EDITOR_CHANGED', {}));
+  $(task_form).addEventListener('submit', (event) => {
+    event.preventDefault(); 
+    register_event('REQUEST_SAVE_SELECTED', {});
+  });
+
+  $(toggle_list_view).addEventListener('click', () => {
+    register_event('REQUEST_UI_TOGGLE', {});
+  }); 
+}
+
+function unwire_dom_events() {
+  if (game.controller === null) {
+    console.error("nothing to unwire");
+    return;
+  }
+  game.controller.abort();
+  game.controller = null;
+}
+
+function process_pending_UI_events() {
+  swap_event_buffers();
+  for (const e of UI_event_frame) {
+    const type = e.type;
+    const event = e.data;
+    //console.log(type);
+    switch (type) {
+      case 'REQUEST_SAVE_SELECTED':
+        save_selected().then( () => {
+          register_event('SAVED_SELECTED', {})
+        }).catch( () => {
+          register_event('SAVE_SELECTED_FAILED', {})
+        });
+        break;
+      case 'MOUSE_UP':
+        register_event('REQUEST_DRAG_STOP', {pageX: event.pageX, pageY: event.pageY});
+        break;
+      case 'REQUEST_DRAG_START':
+        camera.savedX = camera.x;
+        camera.savedY = camera.y;
+        camera.moving = true;
+        camera.pageX = event.pageX;
+        camera.pageY = event.pageY;
+        register_event('DRAG_STARTED', {pageX: event.pageX, pageY: event.pageY});
+        break;
+      case 'DRAG_STARTED':
+        break;
+      case 'GAME_MOUSE_DOWN':
+        if (game.tool === 'drag') {
+          register_event('REQUEST_DRAG_START', {pageX: event.pageX, pageY: event.pageY});
+        }
+        break;
+      case 'REQUEST_DRAG':
+        register_event('REQUEST_CAMERA_MOVE', 
+          {
+           x: camera.savedX + (camera.pageX - event.pageX) / size,
+           y: camera.savedY + (camera.pageY - event.pageY) / size
+          }
+        );
+        break;
+      case 'GAME_MOUSE_MOVED':
+        if (camera.moving) {
+          register_event('REQUEST_DRAG', {pageX: event.pageX, pageY: event.pageY});
+        }
+        let {x: canvas_x, y: canvas_y} = canvas.getBoundingClientRect();
+        let global_x = camera.x - (canvas_x - event.clientX + canvas.width / 2) / size
+        let global_y = camera.y - (canvas_y - event.clientY + canvas.height / 2) / size
+        let hex = xy_nearest_oddq(global_x, global_y)
+        if (!(hex.equals(under_cursor.hex))) {
+          hex.copy(under_cursor.hex);
+          under_cursor.time = Date.now()
+        }
+        register_event('UNDER_CURSOR_CHANGED', {});
+        break;
+      case 'REQUEST_DRAG_STOP':
+        if (camera.moving) {
+          camera.moving = false;
+          register_event('REQUEST_DRAG', {pageX: event.pageX, pageY: event.pageY});
+          register_event('DRAG_STOPPED', {});
+        }
+        break;
+      case 'UI_FOCUSED':
+        break;
+      case 'UI_BLURRED':
+        break;
+      case 'REQUEST_UI_TOGGLE':
+        const which = toggle_list_with_editor();
+        register_event('UI_TOGGLED', {to: which});
+        break;
+      case 'REQUEST_UI_FOCUS':
+        if (event.target === 'hexgrid') {
+          canvas.focus();
+        }        
+        break;
+      case 'REQUEST_UI_BLUR':
+        if (event.target === 'hexgrid') {
+          canvas.blur();
+        }
+        break;
+      case 'CAMERA_MOVED':
+        break;
+      case 'REQUEST_CAMERA_MOVE':
+        camera.x = event.x;
+        camera.y = event.y;
+        register_event('CAMERA_MOVED', {x: event.x, y: event.y});
+        break;
+      case 'CAMERA_ZOOMED':
+        break;
+      case 'REQUEST_CAMERA_ZOOM':
+        size += event.delta / 100;
+        register_event('CAMERA_ZOOMED', {z: size});
+        break;
+      case 'GAME_KEY_PRESSED':
+        if (event.key.toLowerCase() === 'm') {
+          game.tool
+          register_event('MOVE_TOOL_ACTIVATED', {});
+        } else if (event.key === 'Escape') {
+          // default
+          register_event('DRAG_TOOL_ACTIVATED', {}); 
+        }
+        break;
+      case 'MOVE_TOOL_ACTIVATED':
+        break;
+      case 'DRAG_TOOL_ACTIVATED':
+        break;
+      case 'REQUEST_HEX_REMOVE_FAILED':
+        // possibly implement UI indicator of failure
+        // check connection or whatever
+        break;
+      case 'REQUEST_HEX_REMOVE':
+        request_cell_remove(event.hex)
+          .then(() => register_event('HEX_REMOVED', {hex: event.hex}))
+          .catch(error => register_event('REQUEST_HEX_REMOVE_FAILED', {hex: event.hex, cause: error}));
+        break;
+      case 'HEX_REMOVED':
+        let coords = chunk_coords(event.hex);
+        let key = `${coords.col}, ${coords.row}`;
+        if (chunk.has(key)) {
+          delete chunk.get(key).data[`${event.hex.col}, ${event.hex.row}`];
+        }
+        form_new_task();
+        break;
+      case 'HEX_CONTENT_CHANGED':
+        break;
+      case 'EDITOR_CHANGED':
+        update_selected();
+        register_event('SELECTED_CHANGED', {});
+        break;
+      case 'SELECTED_CHANGED':
+        let old = list_view.querySelector(".selected");
+        if (old !== null) {
+          old.classList.remove('selected');
+        }
+        let now = list_view.querySelector(`[data-col="${selected.hex.col}"][data-row="${selected.hex.row}"]`);
+        if (now !== null) {
+          now.classList.add('selected');
+          now.scrollIntoView();
+        }
+        break;
+      case 'HEXAGON_SELECTED':
+        selected.hex = HexOddQ.rec(selected.hex, event.hex.col, event.hex.row);
+        selected.time = Date.now();
+        register_event('SELECTED_CHANGED', {});
+        request_hex(selected.hex)
+          .then(update_form_with_new_task)
+          .catch(console.log);
+        break;
+      case 'LIST_ITEM_SELECTED':
+        register_event('HEXAGON_SELECTED', event);
+        let pos = oddq_to_vec2(event.hex);
+        register_event('REQUEST_CAMERA_MOVE', pos);
+        break;
+    }
+  }
+  UI_event_frame.length = 0;
+}
+
 function loop() {
   if (canvasFrame) {
     cancelAnimationFrame(canvasFrame);
+    canvasFrame = null;
   }
+  if (!game.running) {
+    return
+  }
+  process_pending_UI_events();
   draw_animation_frame();
   canvasFrame = requestAnimationFrame(loop);
 }
 
-// wire up 
-retrieve_current();
-requestAnimationFrame(loop);
+
+function try_gracefully_empty_queue() {
+  const max_cycles = 100;
+  const cycles = 0;
+  while (!(UI_event_queue.length === 0 || cycles >= max_cycles)) {
+    process_pending_UI_events();
+    cycles += 1;
+  }
+  if (cycles >= max_cycles) {
+    console.error(`exceeded {max_cycles} cycles, possible loop`);
+  }
+  return UI_event_queue.length === 0;
+}
+
+function game_stop() {
+  unwire_dom_events();
+  try_gracefully_empty_queue();
+  game.running = false;
+}
+
+function game_start() {
+  wire_dom_events();
+
+  canvas.tabIndex = 0;
+  canvas.focus();
+  register_event('HEXAGON_SELECTED', {hex: under_cursor.hex});
+
+  game.running = true;
+  requestAnimationFrame(loop);
+}
+
+game_start();

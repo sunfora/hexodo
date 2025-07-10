@@ -305,7 +305,7 @@ function load_footer() {
     <script>
       window.appConfig = <?= json_encode($config); ?>
     </script>
-    <script src="board.js" defer></script>   
+    <script src="board.js" type=module defer></script>   
     <script src="draggable-container.js" defer></script>   
   </head>
   <body>

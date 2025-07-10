@@ -9,6 +9,11 @@ $chunk_row =   (int) $_GET['row'];
 $chunk_col =   (int) $_GET['col'];
 $board_id  =   (int) $_GET['board_id'];
 
+/**
+ * TODO(ivan): probably make it a part of config you know
+ */
+const CHUNK_SIZE = 16;
+
 try {
   $select_cards = $db->prepare(
     <<<SQL
@@ -28,10 +33,10 @@ try {
   );
 
   $select_cards->execute([
-    'chunk_row_start' => $chunk_row * 10,
-    'chunk_row_end' => ($chunk_row + 1) * 10,
-    'chunk_col_start' => $chunk_col * 10,
-    'chunk_col_end' => ($chunk_col + 1) * 10,
+    'chunk_row_start' => $chunk_row * CHUNK_SIZE,
+    'chunk_row_end' => ($chunk_row + 1) * CHUNK_SIZE,
+    'chunk_col_start' => $chunk_col * CHUNK_SIZE,
+    'chunk_col_end' => ($chunk_col + 1) * CHUNK_SIZE,
     'board_id' => $board_id
   ]);
 
