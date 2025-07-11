@@ -42,10 +42,113 @@ const description = document.querySelector('#task-description');
 const header = document.querySelector('#task-form-header');
 const completed = document.querySelector('#task-completed');
 
+
+/**
+ * struct Vec3(x: number, y: number, z: number)
+ */
+class Vec3 {
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   */
+  constructor(x, y, z) {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+  }
+
+  /** 
+   * Reuse the Vec3.
+   * NOTE(ivan): unchecked, be sure it really is an object of proper type.
+   * @param {Vec3} target 
+   * 
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   */
+  static rec(target, x, y, z) {
+    target.x = x;
+    target.y = y;
+    target.z = z;
+    return target;
+  }
+
+  /** 
+   * Reuse the Vec3 or new if target is wrong type.
+   * USAGE(ivan): for object pooling and other gc lowerage
+   *
+   * @param {?Vec3} target 
+   *
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   */
+  static recOrNew(target, x, y, z) {
+    return target instanceof Vec3
+      ? Vec3.rec(target, x, y, z)
+      : new Vec3(x, y, z);
+  }
+
+  /** 
+   * Compare two objects 
+   * USAGE(ivan): typesafe comparasion 
+   *
+   * @param {?Vec3} first
+   * @param {?Vec3} second 
+   *
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   */
+  static equals(first, second) {
+    return first  instanceof Vec3 &&
+           second instanceof Vec3 &&
+           first.x === second.x &&
+           first.y === second.y &&
+           first.z === second.z
+  }
+
+  /** 
+   * Compares two Vec3 structs.
+   * @param {Vec3} other 
+   */
+  equals(other) {
+    return other instanceof Vec3 &&
+           this.x === other.x &&
+           this.y === other.y &&
+           this.z === other.z;
+  }
+
+  /** 
+   * Clones Vec3.
+   */
+  clone() {
+    const x = this.x;
+    const y = this.y;
+    const z = this.z
+    return new Vec3(x, y, z);
+  }
+
+  /** 
+   * Copies contents of this Vec3 to other
+   * @param {Vec3} other
+   */
+  copy(other) {
+    const x = this.x;
+    const y = this.y;
+    const z = this.z
+    return Vec3.rec(other, x, y, z);
+  }
+}
+
 /**
  * Usage: for tracking down the visible part of the world.
  */
 class Camera {
+  #DEFAULT_TRANSFORM = new Vec3(0, 0, 0);
+  #DEFAULT_POSITION  = new Vec3(0, 0, 0);
+
   /**
    * Is camera moved by user?
    */
@@ -55,21 +158,13 @@ class Camera {
    * Coordinate transform object.
    * Usage: for mouse dragging events / zoom and panning animations.
    */
-  transform = {
-    x: 0,
-    y: 0,
-    z: 0
-  }
+  transform = this.#DEFAULT_TRANSFORM;
   
   /**
    * Current camera position (the center of the lens).
    * Usage: for altering the base position of the camera.
    */
-  position = {
-    x: 0,
-    y: 0,
-    z: 0
-  }
+  position = this.#DEFAULT_POSITION;
 
   /**
    * X coordinate for the center of the camera lens.
@@ -147,14 +242,14 @@ class Camera {
   fovX = 1;
   
   /**
-   * The width of camera lens (synonym for `fovX`) 
+   * The width of camera lens (synonym for `fovX * 2`) 
    * Since distance from the observer to camera lens is always 1 (for the sake of simplicity)
    */
   get width() {
-    return this.fovX;
+    return this.fovX * 2;
   }
   set width(value) {
-    this.fovX = value;
+    this.fovX = value / 2;
   }
 
   /**
@@ -165,14 +260,41 @@ class Camera {
   fovY = 1;
 
   /**
-   * The height of camera lens (synonym for `fovY`) 
+   * The height of camera lens (synonym for `fovY * 2`) 
    * Since distance from the observer to camera lens is always 1 (for the sake of simplicity)
    */
   get height() {
-    return this.fovY;
+    return this.fovY * 2;
   }
   set height(value) {
-    this.fovY = value;
+    this.fovY = value / 2;
+  }
+
+  /**
+   * The scale of unit circle radius at (0, 0) with radius = 1 at plane with z = 0, projected on camera lens.
+   */
+  get z0UnitScale() {
+    return 1/(this.z + 1);
+  }
+  set z0UnitScale(value) {
+    this.z = 1/value - 1;
+  }
+
+  /**
+   * Set scale of unit circle on plane with specified z.
+   * @param {number} value - new scale
+   * @param {number} z - depth
+   */
+  setUnitScale(value, z=0) {
+    this.z = 1/value - 1 + z;
+  }
+
+  /**
+   * Get scale of unit circle on plane with specified z.
+   * @param {number} z - depth
+   */
+  getUnitScale(z=0) {
+    return 1/(this.z + 1 - z);
   }
 
   /**
@@ -180,16 +302,11 @@ class Camera {
    * Usage: when animation / drag is done.
    */
   applyTransform() {
-    this.position = {
-      x: this.position.x + this.transform.x,
-      y: this.position.y + this.transform.y,
-      z: this.position.z + this.transform.z
-    };
-    this.transform = {
-      x: 0,
-      y: 0,
-      z: 0 
-    };
+    const x = this.position.x + this.transform.x;
+    const y = this.position.y + this.transform.y;
+    const z = this.position.z + this.transform.z;
+    this.position = Vec3.rec(this.position, x, y, z);
+    this.transform = Vec3.rec(this.#DEFAULT_TRANSFORM, 0, 0, 0);
   }
 
   /**
@@ -210,13 +327,20 @@ class Camera {
       this.height = Math.max(width, height);
     }
   }
-
-  visiblePlane(z = 0) {
+  /**
+   * @param {number=} z - plane height
+   * @param {?BoundingBox} dest - reuse
+   * @returns {BoundingBox} visible plane in logical coordinates
+   */
+  visiblePlane(z = 0, dest=null) {
     const z_height = 1 + this.z - z;
-    return {
-      width: z_height * this.fovX, 
-      height: z_height * this.fovY
-    }
+    const width =  z_height * this.width;
+    const height = z_height * this.height;
+    const minX = this.x - width / 2;
+    const maxX = this.x + width / 2;
+    const minY = this.y - height / 2;
+    const maxY = this.y + height / 2;
+    return BoundingBox.recOrNew(dest, minX, maxX, minY, maxY);
   }
 }
 
@@ -325,25 +449,7 @@ function update_selected() {
   selected.completed = completed.checked;
 }
 
-let camera = {
-  x: 0,
-  y: 0,
-  savedX: 0,
-  savedY: 0,
-  pageX: 0,
-  pageY: 0,
-  moving: false
-};
-
-const cam_debug_handler = {
-  set: function(target, property, reciever) {
-    cam_debug.textContent = `cam(${target.x}, ${target.y})`;
-    return Reflect.set(target, property, reciever);
-  }
-}
-camera = new Proxy(camera, cam_debug_handler);
-
-
+let camera = new Camera();
 
 async function request_cell_remove(which) {
   const response = await fetch(`api/boards/${board_id}/cells?row=${which.row}&col=${which.col}`, {
@@ -739,20 +845,18 @@ class BoundingBox {
 function cull_hexes(camera, canvas, target=null) {
   let top_left_hex;
   let bot_right_hex;
+  
+  // reuse target for now for camera
+  let bb = camera.visiblePlane(0, target);
+
   {
-    const corner_x = camera.x - ((canvas.width / 2) / size);
-    const corner_y = camera.y - ((canvas.height/ 2) / size);
-    const cube = cube_round(xy_to_cube(corner_x, corner_y));
-    const oddq = cube_to_oddq(cube);
+    const oddq = xy_nearest_oddq(bb.minX, bb.minY);
     oddq.col -= 1;
     oddq.row -= 1;
     top_left_hex = oddq;
   }
   {
-    const corner_x = camera.x + ((canvas.width / 2) / size);
-    const corner_y = camera.y + ((canvas.height/ 2) / size);
-    const cube = cube_round(xy_to_cube(corner_x, corner_y));
-    const oddq = cube_to_oddq(cube);
+    const oddq = xy_nearest_oddq(bb.maxX, bb.maxY);
     oddq.col += 1;
     oddq.row += 1;
     bot_right_hex = oddq;
@@ -826,22 +930,139 @@ function from_chunk(hex) {
   }
 }
 
+/**
+ * here goes everything that is render specific
+ * for example default render scale
+ */
+class Render {
+  /**
+   * Scale of objects on screen.
+   * USAGE(ivan): basically you transform logical coordianates to pixels this way.
+   */
+  static SCALE = 30;
+  static camera = camera;
+
+  /**
+   * The canvas to draw to.
+   * @type {HTMLCanvasElement}
+   */
+  static canvas = document.getElementById('hex-grid');
+  /**
+   * The current active canvas contex.
+   * @type {CanvasRenderingContext2D} ctx
+   */
+  static ctx = Render.canvas.getContext('2d');
+
+  /**
+   * Translate clientX, clientY to logical coordinates on plane with height z
+   * @param {number} client_x  - client x pixel
+   * @param {number} client_y  - client y pixel
+   * @param {number=} plane_z  - logical z depth
+   * @param {?Vec2}   target   - reuse vec2
+   */
+  static xy_client_to_plane(client_x, client_y, plane_z=0, target=null) {
+    const camera = Render.camera;
+    const pixel_scale = camera.getUnitScale(plane_z) * Render.SCALE;
+    let {x: canvas_x, y: canvas_y} = Render.canvas.getBoundingClientRect();
+
+    let global_x = camera.x - (canvas_x - client_x + Render.canvas.width  / 2) / pixel_scale;
+    let global_y = camera.y - (canvas_y - client_y + Render.canvas.height / 2) / pixel_scale;
+    return Vec2.recOrNew(target, global_x, global_y);
+  }
+
+  /**
+   * @param {number} x - x logical coord
+   * @param {number} y - y logical coord
+   * @param {number} z - z logical coord
+   * @param {?Vec2}  target - reuse object
+   *
+   * @returns {Vec2} coordinates on screen
+   */
+  static xyz_to_screen(x, y, z, target=null) {
+    const camera = Render.camera;
+    const pixel_scale = camera.getUnitScale(z) * Render.SCALE;
+
+    const screen_x = (x - camera.x) * pixel_scale + Render.canvas.width  / 2;
+    const screen_y = (y - camera.y) * pixel_scale + Render.canvas.height / 2;
+
+    return Vec2.recOrNew(target, screen_x, screen_y);
+  }
+  
+  static path_nagon(n) {
+    const ctx = Render.ctx;
+    const turns = n;
+    const angle = 2 * Math.PI / turns;
+
+    ctx.translate(-size * Math.cos(angle), -size * Math.sin(angle));
+    ctx.beginPath()
+    for (let i = 0; i < turns; i += 1) {
+      ctx.lineTo(size, 0);
+      ctx.translate(size, 0);
+      ctx.rotate(angle);
+    }
+    ctx.closePath();
+    ctx.translate(size * Math.cos(angle), size * Math.sin(angle));
+  }
+
+  /**
+   * draw hexagon with specified color and text using cartesian coordinates
+   */
+  static draw_hexagon_xyz(x, y, z=0, style="transparent", text="") {
+    const {x: screen_x, y: screen_y} = Render.xyz_to_screen(x, y, z);
+
+    const ctx  = Render.ctx;
+    const unit = Render.camera.getUnitScale(z); 
+    const size = Render.SCALE * Render.camera.getUnitScale(z);
+
+    ctx.save()
+    {
+      ctx.translate(screen_x, screen_y);
+      // create path for hexagon and stroke / fill it
+      Render.path_nagon(6);
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 0.25 * unit;
+      ctx.fillStyle = style;
+      ctx.stroke();
+      ctx.fill();
+
+      // now add text there 
+      ctx.font = `${size / 3}px Arial`; // Adjust font size as needed to fit the circle
+      ctx.fillStyle = 'black';
+      ctx.textAlign = 'center'; // Center the text horizontally
+      ctx.textBaseline = 'middle'; // Center the text vertically
+      ctx.fillText(text, 0, 0);
+    }
+    ctx.restore();
+  }
+
+  /**
+   * draw hexagon with specified color and text using oddq coordinates
+   */
+  static draw_hexagon_oddq(hex, z=0, style="transparent", text="") {
+    const {x: x, y: y} = oddq_to_vec2(hex);
+    Render.draw_hexagon_xyz(x, y, z, style, text);
+  }
+}
+
+const EMPTY    = { r: 255, g: 255, b: 255 }; // white
+const SELECTED = { r: 255, g: 215, b: 0   }; // gold
+const DONE     = { r: 176, g: 196, b: 182 }; // #B0C4B6
+const TODO     = { r: 255, g: 165, b: 0   }; // orange
+const LOCKED   = { r: 175, g: 157, b: 154 }; // #AF9D9A
+const LOADING  = { r: 128, g: 128, b: 128 }; // grey
+
+
+// Function to linearly interpolate between two values
+function lerp(start, end, t) {
+  return start + t * (end - start);
+}
+
 function draw_grid() {
   let bounding_box = cull_hexes(camera, canvas);
   
-  const EMPTY    = { r: 255, g: 255, b: 255 }; // white
-  const SELECTED = { r: 255, g: 215, b: 0   }; // gold
-  const DONE     = { r: 176, g: 196, b: 182 }; // #B0C4B6
-  const TODO     = { r: 255, g: 165, b: 0   }; // orange
-  const LOCKED   = { r: 175, g: 157, b: 154 }; // #AF9D9A
-  const LOADING  = { r: 128, g: 128, b: 128 }; // grey
 
   const HIGHLIGHT_DURATION = 200;
 
-  // Function to linearly interpolate between two values
-  function lerp(start, end, t) {
-    return start + t * (end - start);
-  }
 
   function lerp_color(start, end, t) {
     const r = Math.round(lerp(start.r, end.r, t));
@@ -865,53 +1086,17 @@ function draw_grid() {
       // reuse hex
       HexOddQ.rec(hex, col, row);
 
-      // find where to draw
-      const pos = oddq_on_screen(hex, camera, canvas);
-
-      ctx.translate(pos.x, pos.y)
-      
-      // TODO(ivan): fetching should not be there
-      //             keep it for now
       let value = from_chunk(hex);
-      let below, left, right;
+      let calculated_color = calculate_color(hex);
 
-      if (hex.col & 1) {
-        below = from_chunk({'col': hex.col, 'row': hex.row + 1});
-        left  = from_chunk({'col': hex.col - 1, 'row': hex.row + 1});
-        right = from_chunk({'col': hex.col + 1, 'row': hex.row + 1});
-      } else {
-        below = from_chunk({'col': hex.col, 'row': hex.row + 1});
-        left  = from_chunk({'col': hex.col - 1, 'row': hex.row});
-        right = from_chunk({'col': hex.col + 1, 'row': hex.row});
+      if (calculated_color === DONE) {
+        new_done.push(value);
+      } else if (calculated_color === TODO) {
+        new_active.push(value);
+      } else if (calculated_color === LOCKED) {
+        new_locked.push(value);
       }
 
-      let calculated_color;
-
-      let all_loaded = value !== null
-                    && below !== null
-                    && left  !== null
-                    && right !== null;
-
-      if (all_loaded) {
-        let unlocked = (below === undefined  || below.completed)
-                    && (left  === undefined  || left.completed )
-                    && (right === undefined  || right.completed);
-        if (value === undefined) {
-          calculated_color = EMPTY;
-        } else if (value.completed) {
-          calculated_color = DONE;
-          new_done.push(value);
-        } else if (unlocked) {
-          calculated_color = TODO;
-          new_active.push(value);
-        } else {
-          calculated_color = LOCKED;
-          new_locked.push(value);
-        }
-      } else {
-        calculated_color = LOADING;
-      }
-      
       if (hex.equals(under_cursor.hex)) {
         let nt = Math.min(Date.now() - under_cursor.time, HIGHLIGHT_DURATION) / HIGHLIGHT_DURATION;
         calculated_color = lerp_color(calculated_color, SELECTED, nt);
@@ -919,13 +1104,51 @@ function draw_grid() {
         let nt = Math.abs(Math.sin(Date.now() / 500));
         calculated_color = lerp_color(calculated_color, SELECTED, nt);
       }         
-      draw_hexagon(`${hex.col} ${hex.row}`, color_to_style(calculated_color));
-
-      // go back
-      ctx.translate(-pos.x, -pos.y);
+      Render.draw_hexagon_oddq(hex, 0, color_to_style(calculated_color), `${hex.col} ${hex.row}`);
     }
   }
   update_lists(new_active, new_done, new_locked);
+}
+
+function calculate_color(hex) {
+  let value = from_chunk(hex);
+  let below, left, right;
+
+  if (hex.col & 1) {
+    below = from_chunk({'col': hex.col, 'row': hex.row + 1});
+    left  = from_chunk({'col': hex.col - 1, 'row': hex.row + 1});
+    right = from_chunk({'col': hex.col + 1, 'row': hex.row + 1});
+  } else {
+    below = from_chunk({'col': hex.col, 'row': hex.row + 1});
+    left  = from_chunk({'col': hex.col - 1, 'row': hex.row});
+    right = from_chunk({'col': hex.col + 1, 'row': hex.row});
+  }
+
+  let calculated_color;
+
+  let all_loaded = value !== null
+                && below !== null
+                && left  !== null
+                && right !== null;
+
+  if (all_loaded) {
+    let unlocked = (below === undefined  || below.completed)
+                && (left  === undefined  || left.completed )
+                && (right === undefined  || right.completed);
+    if (value === undefined) {
+      calculated_color = EMPTY;
+    } else if (value.completed) {
+      calculated_color = DONE;
+    } else if (unlocked) {
+      calculated_color = TODO;
+    } else {
+      calculated_color = LOCKED;
+    }
+  } else {
+    calculated_color = LOADING;
+  }
+
+  return calculated_color;
 }
 
 function draw_hexagon(text="lol", style='transparent') {
@@ -958,6 +1181,11 @@ function draw_hexagon(text="lol", style='transparent') {
 function draw_animation_frame() {
   canvas.width = canvas.clientWidth;
   canvas.height = canvas.clientHeight;
+
+  // update camera fovX, fovY automatically
+  camera.width  =  canvas.width  / 30;
+  camera.height =  canvas.height / 30;
+  
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   draw_grid();
 }
@@ -1102,46 +1330,56 @@ function process_pending_UI_events() {
     const event = e.data;
     //console.log(type);
     switch (type) {
-      case 'REQUEST_SAVE_SELECTED':
+      case 'REQUEST_SAVE_SELECTED': {
         save_selected().then( () => {
           register_event('SAVED_SELECTED', {})
         }).catch( () => {
           register_event('SAVE_SELECTED_FAILED', {})
         });
         break;
-      case 'MOUSE_UP':
-        register_event('REQUEST_DRAG_STOP', {pageX: event.pageX, pageY: event.pageY});
+      }
+      case 'MOUSE_UP': {
+        register_event('REQUEST_DRAG_STOP', {});
         break;
-      case 'REQUEST_DRAG_START':
-        camera.savedX = camera.x;
-        camera.savedY = camera.y;
-        camera.moving = true;
-        camera.pageX = event.pageX;
-        camera.pageY = event.pageY;
-        register_event('DRAG_STARTED', {pageX: event.pageX, pageY: event.pageY});
+      }
+      case 'REQUEST_DRAG_START': {
+        const drag_transform = {
+          get x() {
+            return (this.savedPageX - this.pageX) / size;
+          },
+          get y() {
+            return (this.savedPageY - this.pageY) / size;
+          },
+          z: 0,
+          pageX: event.pageX,
+          pageY: event.pageY,
+          savedPageX: event.pageX,
+          savedPageY: event.pageY
+        }
+        camera.transform = drag_transform;
+        camera.isDragged = true;
+        register_event('DRAG_STARTED', {drag: drag_transform});
         break;
-      case 'DRAG_STARTED':
+      }
+      case 'DRAG_STARTED': {
         break;
-      case 'GAME_MOUSE_DOWN':
+      }
+      case 'GAME_MOUSE_DOWN': {
         if (game.tool === 'drag') {
           register_event('REQUEST_DRAG_START', {pageX: event.pageX, pageY: event.pageY});
         }
         break;
-      case 'REQUEST_DRAG':
-        register_event('REQUEST_CAMERA_MOVE', 
-          {
-           x: camera.savedX + (camera.pageX - event.pageX) / size,
-           y: camera.savedY + (camera.pageY - event.pageY) / size
-          }
-        );
+      }
+      case 'CAMERA_DRAGGED': {
         break;
-      case 'GAME_MOUSE_MOVED':
-        if (camera.moving) {
-          register_event('REQUEST_DRAG', {pageX: event.pageX, pageY: event.pageY});
+      }
+      case 'GAME_MOUSE_MOVED': {
+        if (camera.isDragged) {
+          camera.transform.pageX = event.pageX;
+          camera.transform.pageY = event.pageY;
+          register_event('CAMERA_DRAGGED', {});
         }
-        let {x: canvas_x, y: canvas_y} = canvas.getBoundingClientRect();
-        let global_x = camera.x - (canvas_x - event.clientX + canvas.width / 2) / size
-        let global_y = camera.y - (canvas_y - event.clientY + canvas.height / 2) / size
+        let {x: global_x, y: global_y} = Render.xy_client_to_plane(event.clientX, event.clientY, 0);
         let hex = xy_nearest_oddq(global_x, global_y)
         if (!(hex.equals(under_cursor.hex))) {
           hex.copy(under_cursor.hex);
@@ -1149,45 +1387,77 @@ function process_pending_UI_events() {
         }
         register_event('UNDER_CURSOR_CHANGED', {});
         break;
-      case 'REQUEST_DRAG_STOP':
-        if (camera.moving) {
-          camera.moving = false;
-          register_event('REQUEST_DRAG', {pageX: event.pageX, pageY: event.pageY});
+      }
+      case 'REQUEST_DRAG_STOP': {
+        if (camera.isDragged) {
+          camera.isDragged = false;
+          camera.applyTransform();
           register_event('DRAG_STOPPED', {});
+          register_event('CAMERA_MOVED', {});
         }
         break;
+      }
       case 'UI_FOCUSED':
         break;
-      case 'UI_BLURRED':
+      case 'UI_BLURRED': {
         break;
-      case 'REQUEST_UI_TOGGLE':
+      }
+      case 'REQUEST_UI_TOGGLE': {
         const which = toggle_list_with_editor();
         register_event('UI_TOGGLED', {to: which});
         break;
-      case 'REQUEST_UI_FOCUS':
+      }
+      case 'REQUEST_UI_FOCUS': {
         if (event.target === 'hexgrid') {
           canvas.focus();
         }        
         break;
-      case 'REQUEST_UI_BLUR':
+      }
+      case 'REQUEST_UI_BLUR': {
         if (event.target === 'hexgrid') {
           canvas.blur();
         }
         break;
-      case 'CAMERA_MOVED':
+      }
+      case 'CAMERA_MOVED': {
         break;
-      case 'REQUEST_CAMERA_MOVE':
+      }
+      case 'REQUEST_CAMERA_MOVE': {
+        const transition_duration = 200;
+
+        const transition = {
+          get x() {
+            return lerp(this.fromX, this.toX, this.t) - this.toX;
+          },
+          get y() {
+            return lerp(this.fromY, this.toY, this.t) - this.toY;
+          },
+          z: 0,
+          get t() {
+            return Math.min((Date.now() - this.start) / transition_duration, 1);
+          },
+          fromX: camera.x,
+          fromY: camera.y,
+          toX: event.x,
+          toY: event.y,
+          start: Date.now()
+        }
         camera.x = event.x;
         camera.y = event.y;
+        camera.transform = transition;
         register_event('CAMERA_MOVED', {x: event.x, y: event.y});
         break;
-      case 'CAMERA_ZOOMED':
+      }
+      case 'CAMERA_ZOOMED': {
         break;
-      case 'REQUEST_CAMERA_ZOOM':
-        size += event.delta / 100;
-        register_event('CAMERA_ZOOMED', {z: size});
+      }
+      case 'REQUEST_CAMERA_ZOOM': {
+        camera.z0UnitScale += event.delta / 3000;
+        size = camera.z0UnitScale * 30;
+        register_event('CAMERA_ZOOMED', {});
         break;
-      case 'GAME_KEY_PRESSED':
+      }
+      case 'GAME_KEY_PRESSED': {
         if (event.key.toLowerCase() === 'm') {
           game.tool
           register_event('MOVE_TOOL_ACTIVATED', {});
@@ -1196,20 +1466,25 @@ function process_pending_UI_events() {
           register_event('DRAG_TOOL_ACTIVATED', {}); 
         }
         break;
-      case 'MOVE_TOOL_ACTIVATED':
+      }
+      case 'MOVE_TOOL_ACTIVATED': {
         break;
-      case 'DRAG_TOOL_ACTIVATED':
+      }
+      case 'DRAG_TOOL_ACTIVATED': {
         break;
-      case 'REQUEST_HEX_REMOVE_FAILED':
+      }
+      case 'REQUEST_HEX_REMOVE_FAILED': {
         // possibly implement UI indicator of failure
         // check connection or whatever
         break;
-      case 'REQUEST_HEX_REMOVE':
+      } 
+      case 'REQUEST_HEX_REMOVE': {
         request_cell_remove(event.hex)
           .then(() => register_event('HEX_REMOVED', {hex: event.hex}))
           .catch(error => register_event('REQUEST_HEX_REMOVE_FAILED', {hex: event.hex, cause: error}));
         break;
-      case 'HEX_REMOVED':
+      }
+      case 'HEX_REMOVED': {
         let coords = chunk_coords(event.hex);
         let key = `${coords.col}, ${coords.row}`;
         if (chunk.has(key)) {
@@ -1217,13 +1492,16 @@ function process_pending_UI_events() {
         }
         form_new_task();
         break;
-      case 'HEX_CONTENT_CHANGED':
+      }
+      case 'HEX_CONTENT_CHANGED': {
         break;
-      case 'EDITOR_CHANGED':
+      }
+      case 'EDITOR_CHANGED': {
         update_selected();
         register_event('SELECTED_CHANGED', {});
         break;
-      case 'SELECTED_CHANGED':
+      }
+      case 'SELECTED_CHANGED': {
         let old = list_view.querySelector(".selected");
         if (old !== null) {
           old.classList.remove('selected');
@@ -1234,19 +1512,24 @@ function process_pending_UI_events() {
           now.scrollIntoView();
         }
         break;
-      case 'HEXAGON_SELECTED':
+      }
+      case 'HEXAGON_SELECTED': {
         selected.hex = HexOddQ.rec(selected.hex, event.hex.col, event.hex.row);
         selected.time = Date.now();
         register_event('SELECTED_CHANGED', {});
         request_hex(selected.hex)
           .then(update_form_with_new_task)
           .catch(console.log);
+        let pos = oddq_to_vec2(event.hex);
+        register_event('REQUEST_CAMERA_MOVE', pos);
         break;
-      case 'LIST_ITEM_SELECTED':
+      }
+      case 'LIST_ITEM_SELECTED': {
         register_event('HEXAGON_SELECTED', event);
         let pos = oddq_to_vec2(event.hex);
         register_event('REQUEST_CAMERA_MOVE', pos);
         break;
+      }
     }
   }
   UI_event_frame.length = 0;
@@ -1260,8 +1543,23 @@ function loop() {
   if (!game.running) {
     return
   }
+
   process_pending_UI_events();
   draw_animation_frame();
+
+  {
+    cam_debug.textContent = `cam(${camera.x.toFixed(5)}, ${camera.y.toFixed(5)}, ${camera.z.toFixed(5)})`;
+    const bb = camera.visiblePlane(0);
+    const x = bb.minX * size;
+    const y = bb.minY * size;
+    const width =  (bb.maxX - bb.minX) * size;
+    const height = (bb.maxY - bb.minY) * size;
+
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(canvas.width/2 - width/2, canvas.height/2 - height/2, width, height);
+  }
+
   canvasFrame = requestAnimationFrame(loop);
 }
 
