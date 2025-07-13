@@ -134,7 +134,7 @@ class Vec3 {
    * Copies contents of this Vec3 to other
    * @param {Vec3} other
    */
-  copy(other) {
+  copyTo(other) {
     const x = this.x;
     const y = this.y;
     const z = this.z
@@ -814,7 +814,7 @@ class BoundingBox {
    * Copies contents of this BoundingBox to other
    * @param {BoundingBox} other
    */
-  copy(other) {
+  copyTo(other) {
     const minX = this.minX;
     const maxX = this.maxX;
     const minY = this.minY;
@@ -1382,7 +1382,7 @@ function process_pending_UI_events() {
         let {x: global_x, y: global_y} = Render.xy_client_to_plane(event.clientX, event.clientY, 0);
         let hex = xy_nearest_oddq(global_x, global_y)
         if (!(hex.equals(under_cursor.hex))) {
-          hex.copy(under_cursor.hex);
+          hex.copyTo(under_cursor.hex);
           under_cursor.time = Date.now()
         }
         register_event('UNDER_CURSOR_CHANGED', {});

@@ -83,7 +83,7 @@ export class HexOddQ {
    * Copies contents of this HexOddQ to other
    * @param {HexOddQ} other
    */
-  copy(other) {
+  copyTo(other) {
     const col = this.col;
     const row = this.row
     return HexOddQ.rec(other, col, row);
@@ -184,7 +184,7 @@ export class HexCube {
    * Copies contents of this HexCube to other
    * @param {HexCube} other
    */
-  copy(other) {
+  copyTo(other) {
     const q = this.q;
     const r = this.r;
     const s = this.s
@@ -322,7 +322,7 @@ export class Vec2 {
    * Copies contents of this Vec2 to other
    * @param {Vec2} other
    */
-  copy(other) {
+  copyTo(other) {
     const x = this.x;
     const y = this.y
     return Vec2.rec(other, x, y);

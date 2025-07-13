@@ -258,7 +258,7 @@ $ctorJsdoc   */
    * Copies contents of this $name to other
    * @param {{$name}} other
    */
-  copy(other) {
+  copyTo(other) {
     {$cloneBody}
     return $name.rec(other, $ctorParams);
   }
