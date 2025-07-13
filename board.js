@@ -1628,6 +1628,7 @@ function process_pending_UI_events() {
           savedPageX: event.pageX,
           savedPageY: event.pageY
         }
+        camera.applyTransform();
         camera.transform = drag_transform;
         camera.isDragged = true;
         register_event('DRAG_STARTED', {drag: drag_transform});
@@ -1714,6 +1715,7 @@ function process_pending_UI_events() {
           toY: event.y,
           start: Date.now()
         }
+        camera.applyTransform();
         camera.x = event.x;
         camera.y = event.y;
         camera.transform = transition;
