@@ -1301,27 +1301,6 @@ function cull_hexes(camera, canvas, target=null) {
   return BoundingBox.fromTwoHexes(top_left_hex, bot_right_hex, target);
 }
 
-/**
- * Convert logical odd-q coordinates to actual center of the hexagon on the screen.
- * Usage: to draw the hexagon
- *
- * @param {HexOddQ} hex - the hex on screen
- * @param {?Vec2} dest - the resulting point in pixels
- * returns {Vec2} - oddq on screen in pixels
- */
-function oddq_on_screen(hex, camera, canvas, dest=null) {
-  const center_screen_px_x = canvas.width  / 2;
-  const center_screen_px_y = canvas.height / 2;
-  
-  const {x: hex_logical_cart_x, y: hex_logical_cart_y} = oddq_to_vec2(hex); 
-  const {x: cam_logical_cart_x, y: cam_logical_cart_y} = camera;
-
-  const hex_screen_px_x = center_screen_px_x + (hex_logical_cart_x - cam_logical_cart_x) * size;
-  const hex_screen_px_y = center_screen_px_y + (hex_logical_cart_y - cam_logical_cart_y) * size;
-
-  return Vec2.recOrNew(dest, hex_screen_px_x, hex_screen_px_y); 
-}
-
 function from_chunk(hex) {
   let pos = chunk_coords(hex);
   let key = `${pos.col}, ${pos.row}`;
