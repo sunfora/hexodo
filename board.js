@@ -939,9 +939,9 @@ class ChunkStorage {
  *             Well... this thing is a flat thing specifically for EventBus.
  *             And it is kinda simple stupid and good for cache.
  *
- * TODO(ivan): Step through this in a debugger
+ * DONE(ivan): Step through this in a debugger
  */
-class FixedPool {
+export class FixedPool {
   /**
    * Note(ivan): return from this queue if something is removed
    */ 
@@ -951,9 +951,10 @@ class FixedPool {
    * Registers new fixed pool. Returns id to use.
    */
   static register(size) {
+    const pool = FixedPool.pool;
     pool.push(size);
     const id = pool.length - 1;
-    for (let i = 0; i < size; ++i) {
+    for (let i = 0; i <= size; ++i) {
       pool.push(null);
     }
     return id;
@@ -963,25 +964,47 @@ class FixedPool {
    * Push object to a dedicated pool, returns boolean on sucess (if pool is not overflown).
    */
   static reuse(id, object) {
-    const size = pool[id];
-    if (size > 0) {
-      pool[id]--;
-      pool[id + size] = object;
+    const pool = FixedPool.pool;
+    const free_id = id;
+    const free = FixedPool.free(id);
+    const top = FixedPool.top(id);
+    if (free > 0) {
+      pool[free_id]--;
+      pool[top - 1] = object;
     } else {
       console.error("FixedPool: pool overflow");
     }
+  }
+
+  static top(id) {
+    return (id + 1) + FixedPool.free(id);
+  }
+
+  static free(id) {
+    const pool = FixedPool.pool;
+    return pool[id];
   }
 
   /**
    * Get an object from pool or null if nothing is there.
    */
   static object(id) {
-    const object = pool[id + pool[id] + 1];
+    const pool = FixedPool.pool;
+    const free_id = id;
+    const free = FixedPool.free(id);
+    const top = FixedPool.top(id);
+    
+    // take the object
+    const object = pool[top];
+    pool[top] = null;
+
     if (object !== null) {
-      pool[id]++;
+      // increase free slots count
+      pool[free_id]++;
     } else {
       console.error("FixedPool: pool underflow");
     }
+
     return object;
   }
 }
