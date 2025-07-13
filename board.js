@@ -540,6 +540,270 @@ let requests_made = 0;
 let global_timeout = 0;
 
 /**
+ * struct Chunk(row: number, col: number)
+ */
+class Chunk {
+
+  /**
+   * The size of the chunk in terms of size x size of hexes
+   * So currently 16 x 16 = 256
+   *
+   * TODO(ivan): lock this down 
+   */
+  static SIZE = 16;
+
+  /**
+   * @param {number} row
+   * @param {number} col
+   */
+  constructor(row, col) {
+    this.row = row;
+    /* TODO(ivan): fregr */ this.col = col;
+  }
+
+  /** 
+   * Reuse the Chunk.
+   * NOTE(ivan): unchecked, be sure it really is an object of proper type.
+   * @param {Chunk} target 
+   * 
+   * @param {number} row
+   * @param {number} col
+   */
+  static rec(target, row, col) {
+    target.row = row;
+    target.col = col;
+    return target;
+  }
+
+  /** 
+   * Reuse the Chunk or new if target is wrong type.
+   * USAGE(ivan): for object pooling and other gc lowerage
+   *
+   * @param {?Chunk} target 
+   *
+   * @param {number} row
+   * @param {number} col
+   */
+  static recOrNew(target, row, col) {
+    return target instanceof Chunk
+      ? Chunk.rec(target, row, col)
+      : new Chunk(row, col);
+  }
+
+  /** 
+   * Compare two objects 
+   * USAGE(ivan): typesafe comparasion 
+   *
+   * @param {?Chunk} first
+   * @param {?Chunk} second 
+   *
+   * @param {number} row
+   * @param {number} col
+   */
+  static equals(first, second) {
+    return first  instanceof Chunk &&
+           second instanceof Chunk &&
+           first.row === second.row &&
+           first.col === second.col
+  }
+
+  /** 
+   * Compares two Chunk structs.
+   * @param {Chunk} other 
+   */
+  equals(other) {
+    return other instanceof Chunk &&
+           this.row === other.row &&
+           this.col === other.col;
+  }
+
+  /** 
+   * Clones Chunk.
+   */
+  clone() {
+    const row = this.row;
+    const col = this.col
+    return new Chunk(row, col);
+  }
+
+  /** 
+   * Copies contents of this Chunk to other
+   * @param {Chunk} other
+   */
+  copyTo(other) {
+    const row = this.row;
+    const col = this.col
+    return Chunk.rec(other, row, col);
+  }
+
+  /**
+   * Min col for oddq hex (as if it was bounding box)
+   */
+  get minX() {
+    return this.col * Chunk.SIZE;
+  }
+
+  /**
+   * Max col for oddq hex (as if it was bounding box)
+   */
+  get maxX() {
+    return (this.col + 1) * Chunk.SIZE - 1;
+  }
+
+  /**
+   * Min row for oddq hex (as if it was bounding box)
+   */
+  get minY() {
+    return this.row * Chunk.SIZE;
+  }
+
+  /**
+   * Max row for oddq hex (as if it was bounding box)
+   */
+  get maxY() {
+    return (this.row + 1) * Chunk.SIZE - 1;
+  }
+
+  /**
+   * Use hex to locate chunk which contains the hex.
+   *
+   * @param {HexOddQ} hex - hex coords 
+   * @param {?Chunk} - reuse
+   * @returns {?Chunk} - chunk which contains hex
+   */
+  static fromHex(hex, target) {
+    const col = Math.floor(hex.col / Chunk.SIZE);
+    const row = Math.floor(hex.row / Chunk.SIZE);
+    return Chunk.recOrNew(target, col, row);
+  }
+}
+
+/**
+ * struct HexInfo(
+ *    status: string, 
+ *    type?: string = null, 
+ *    title?: string = null, 
+ *    completed?: boolean = null, 
+ *    description?: string = null
+ *  )
+ */
+class HexInfo {
+  /**
+   * @param {string} status
+   * @param {string=} type
+   * @param {string=} title
+   * @param {boolean=} completed
+   * @param {string=} description
+   */
+  constructor(status, type, title, completed, description) {
+    this.status = status;
+    this.type = type === undefined ? null : type;
+    this.title = title === undefined ? null : title;
+    this.completed = completed === undefined ? null : completed;
+    this.description = description === undefined ? null : description;
+  }
+
+  /** 
+   * Reuse the HexInfo.
+   * NOTE(ivan): unchecked, be sure it really is an object of proper type.
+   * @param {HexInfo} target 
+   * 
+   * @param {string} status
+   * @param {string=} type
+   * @param {string=} title
+   * @param {boolean=} completed
+   * @param {string=} description
+   */
+  static rec(target, status, type, title, completed, description) {
+    target.status = status;
+    target.type = (type === undefined)? null : type;
+    target.title = (title === undefined)? null : title;
+    target.completed = (completed === undefined)? null : completed;
+    target.description = (description === undefined)? null : description;
+    return target;
+  }
+
+  /** 
+   * Reuse the HexInfo or new if target is wrong type.
+   * USAGE(ivan): for object pooling and other gc lowerage
+   *
+   * @param {?HexInfo} target 
+   *
+   * @param {string} status
+   * @param {string=} type
+   * @param {string=} title
+   * @param {boolean=} completed
+   * @param {string=} description
+   */
+  static recOrNew(target, status, type, title, completed, description) {
+    return target instanceof HexInfo
+      ? HexInfo.rec(target, status, type, title, completed, description)
+      : new HexInfo(status, type, title, completed, description);
+  }
+
+  /** 
+   * Compare two objects 
+   * USAGE(ivan): typesafe comparasion 
+   *
+   * @param {?HexInfo} first
+   * @param {?HexInfo} second 
+   *
+   * @param {string} status
+   * @param {string=} type
+   * @param {string=} title
+   * @param {boolean=} completed
+   * @param {string=} description
+   */
+  static equals(first, second) {
+    return first  instanceof HexInfo &&
+           second instanceof HexInfo &&
+           first.status === second.status &&
+           first.type === second.type &&
+           first.title === second.title &&
+           first.completed === second.completed &&
+           first.description === second.description
+  }
+
+  /** 
+   * Compares two HexInfo structs.
+   * @param {HexInfo} other 
+   */
+  equals(other) {
+    return other instanceof HexInfo &&
+           this.status === other.status &&
+           this.type === other.type &&
+           this.title === other.title &&
+           this.completed === other.completed &&
+           this.description === other.description;
+  }
+
+  /** 
+   * Clones HexInfo.
+   */
+  clone() {
+    const status = this.status;
+    const type = this.type;
+    const title = this.title;
+    const completed = this.completed;
+    const description = this.description
+    return new HexInfo(status, type, title, completed, description);
+  }
+
+  /** 
+   * Copies contents of this HexInfo to other
+   * @param {HexInfo} other
+   */
+  copyTo(other) {
+    const status = this.status;
+    const type = this.type;
+    const title = this.title;
+    const completed = this.completed;
+    const description = this.description
+    return HexInfo.rec(other, status, type, title, completed, description);
+  }
+}
+
+/**
  * The system responsible for handling all kind of fetches from the server.
  * When it comes to hexes.
  */
@@ -584,11 +848,6 @@ class ChunkStorage {
    *   TODO(ivan): implement on server side
    */
   static LOD_2 = 16;
-
-  /**
-   * the size of the chunk 16 x 16 blocks
-   */
-  static CHUNK_SIZE = 16;
 
   /**
    * Not more than 10 individual fetches from the user.
@@ -655,8 +914,21 @@ class ChunkStorage {
     }
   }
 
+  /**
+   * Retrieves hex info from oddq coordinates.
+   * @param {HexOddQ} - coordinates
+   * @param {?HexInfo} target - reuse 
+   */
+  static getHexInfo(hex, target) {
+    
+  }
+
+  static updateStatus(hex) {
+    
+  }
+
   // TODO(ivan): not finished
-  storage = new Map();
+  static storage = new Map();
 }
 
 /**
