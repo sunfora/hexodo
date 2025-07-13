@@ -540,7 +540,7 @@ let requests_made = 0;
 let global_timeout = 0;
 
 /**
- * struct Chunk(row: number, col: number)
+ * struct Chunk(col: number, row: number)
  */
 class Chunk {
 
@@ -553,12 +553,12 @@ class Chunk {
   static SIZE = 16;
 
   /**
-   * @param {number} row
    * @param {number} col
+   * @param {number} row
    */
-  constructor(row, col) {
+  constructor(col, row) {
     this.row = row;
-    /* TODO(ivan): fregr */ this.col = col;
+    this.col = col;
   }
 
   /** 
@@ -566,10 +566,10 @@ class Chunk {
    * NOTE(ivan): unchecked, be sure it really is an object of proper type.
    * @param {Chunk} target 
    * 
-   * @param {number} row
    * @param {number} col
+   * @param {number} row
    */
-  static rec(target, row, col) {
+  static rec(target, col, row) {
     target.row = row;
     target.col = col;
     return target;
@@ -581,13 +581,13 @@ class Chunk {
    *
    * @param {?Chunk} target 
    *
-   * @param {number} row
    * @param {number} col
+   * @param {number} row
    */
-  static recOrNew(target, row, col) {
+  static recOrNew(target, col, row) {
     return target instanceof Chunk
-      ? Chunk.rec(target, row, col)
-      : new Chunk(row, col);
+      ? Chunk.rec(target, col, row)
+      : new Chunk(col, row);
   }
 
   /** 
@@ -623,7 +623,7 @@ class Chunk {
   clone() {
     const row = this.row;
     const col = this.col
-    return new Chunk(row, col);
+    return new Chunk(col, row);
   }
 
   /** 
@@ -633,7 +633,7 @@ class Chunk {
   copyTo(other) {
     const row = this.row;
     const col = this.col
-    return Chunk.rec(other, row, col);
+    return Chunk.rec(other, col, row);
   }
 
   /**
@@ -667,39 +667,65 @@ class Chunk {
   /**
    * Use hex to locate chunk which contains the hex.
    *
-   * @param {HexOddQ} hex - hex coords 
+   * @param {HexOddQ} hex - oddq coords 
    * @param {?Chunk} - reuse
    * @returns {?Chunk} - chunk which contains hex
    */
-  static fromHex(hex, target) {
-    const col = Math.floor(hex.col / Chunk.SIZE);
-    const row = Math.floor(hex.row / Chunk.SIZE);
+  static fromHexOddQ(hex, target=null) {
+    return Chunk.fromColRow(hex.col, hex.row, target);
+  }
+
+  /**
+   * Use hex to locate chunk which contains the hex.
+   *
+   * @param {number} col - column in oddq
+   * @param {number} row - row in oddq
+   * @param {?Chunk} - reuse
+   * @returns {?Chunk} - chunk which contains hex
+   */
+  static fromColRow(col, row, target=null) {
+    col = Chunk.colHexCol(col);
+    row = Chunk.rowHexRow(row);
     return Chunk.recOrNew(target, col, row);
+  }
+
+  // TODO(ivan): add comment
+  static colHexCol(col) {
+    return Math.floor(col / Chunk.SIZE);
+  }
+
+  // TODO(ivan): add comment
+  static rowHexRow(row) {
+    return Math.floor(row / Chunk.SIZE);
   }
 }
 
+
 /**
  * struct HexInfo(
- *    status: string, 
- *    type?: string = null, 
+ *    status?: string = "loading", 
+ *    id?: number = null,
+ *    type?: string = "empty", 
  *    title?: string = null, 
- *    completed?: boolean = null, 
+ *    completed?: boolean = false, 
  *    description?: string = null
- *  )
+ * ) 
  */
 class HexInfo {
   /**
-   * @param {string} status
+   * @param {string=} status
+   * @param {number=} id
    * @param {string=} type
    * @param {string=} title
    * @param {boolean=} completed
    * @param {string=} description
    */
-  constructor(status, type, title, completed, description) {
-    this.status = status;
-    this.type = type === undefined ? null : type;
+  constructor(status, id, type, title, completed, description) {
+    this.status = status === undefined ? "loading" : status;
+    this.id = id === undefined ? null : id;
+    this.type = type === undefined ? "empty" : type;
     this.title = title === undefined ? null : title;
-    this.completed = completed === undefined ? null : completed;
+    this.completed = completed === undefined ? false : completed;
     this.description = description === undefined ? null : description;
   }
 
@@ -708,17 +734,19 @@ class HexInfo {
    * NOTE(ivan): unchecked, be sure it really is an object of proper type.
    * @param {HexInfo} target 
    * 
-   * @param {string} status
+   * @param {string=} status
+   * @param {number=} id
    * @param {string=} type
    * @param {string=} title
    * @param {boolean=} completed
    * @param {string=} description
    */
-  static rec(target, status, type, title, completed, description) {
-    target.status = status;
-    target.type = (type === undefined)? null : type;
+  static rec(target, status, id, type, title, completed, description) {
+    target.status = (status === undefined)? "loading" : status;
+    target.id = (id === undefined)? null : id;
+    target.type = (type === undefined)? "empty" : type;
     target.title = (title === undefined)? null : title;
-    target.completed = (completed === undefined)? null : completed;
+    target.completed = (completed === undefined)? false : completed;
     target.description = (description === undefined)? null : description;
     return target;
   }
@@ -729,16 +757,17 @@ class HexInfo {
    *
    * @param {?HexInfo} target 
    *
-   * @param {string} status
+   * @param {string=} status
+   * @param {number=} id
    * @param {string=} type
    * @param {string=} title
    * @param {boolean=} completed
    * @param {string=} description
    */
-  static recOrNew(target, status, type, title, completed, description) {
+  static recOrNew(target, status, id, type, title, completed, description) {
     return target instanceof HexInfo
-      ? HexInfo.rec(target, status, type, title, completed, description)
-      : new HexInfo(status, type, title, completed, description);
+      ? HexInfo.rec(target, status, id, type, title, completed, description)
+      : new HexInfo(status, id, type, title, completed, description);
   }
 
   /** 
@@ -748,7 +777,8 @@ class HexInfo {
    * @param {?HexInfo} first
    * @param {?HexInfo} second 
    *
-   * @param {string} status
+   * @param {string=} status
+   * @param {number=} id
    * @param {string=} type
    * @param {string=} title
    * @param {boolean=} completed
@@ -758,6 +788,7 @@ class HexInfo {
     return first  instanceof HexInfo &&
            second instanceof HexInfo &&
            first.status === second.status &&
+           first.id === second.id &&
            first.type === second.type &&
            first.title === second.title &&
            first.completed === second.completed &&
@@ -771,6 +802,7 @@ class HexInfo {
   equals(other) {
     return other instanceof HexInfo &&
            this.status === other.status &&
+           this.id === other.id &&
            this.type === other.type &&
            this.title === other.title &&
            this.completed === other.completed &&
@@ -782,11 +814,12 @@ class HexInfo {
    */
   clone() {
     const status = this.status;
+    const id = this.id;
     const type = this.type;
     const title = this.title;
     const completed = this.completed;
     const description = this.description
-    return new HexInfo(status, type, title, completed, description);
+    return new HexInfo(status, id, type, title, completed, description);
   }
 
   /** 
@@ -795,12 +828,23 @@ class HexInfo {
    */
   copyTo(other) {
     const status = this.status;
+    const id = this.id;
     const type = this.type;
     const title = this.title;
     const completed = this.completed;
     const description = this.description
-    return HexInfo.rec(other, status, type, title, completed, description);
+    return HexInfo.rec(other, status, id, type, title, completed, description);
   }
+}
+
+/**
+ * Get mathematical remainder. a = r mod b, where b > r >= 0
+ * @param {number} a - the number to divide
+ * @param {number} m - the modulo
+ * @returns {number} - remainder of division
+ */
+function rem(a, m) {
+  return ((a % m) + m) % m;
 }
 
 /**
@@ -816,11 +860,11 @@ class ChunkStorage {
   static cycles = 0;
   
   static queue = [
-    {cycles: 8,   data: []},  // 0  lod 0 near camera
-    {cycles: 16,  data: []},  // 1  lod 1 huge near camera
-    {cycles: 32,  data: []},  // 2  lod 2 minimap
-    {cycles: 64,  data: []},  // 3  individual hexes
-    {cycles: 128, data: []}   // 4  slowly load past camera
+    {cycles: 8,   tasks: []},  // 0  lod 0 near camera
+    {cycles: 16,  tasks: []},  // 1  lod 1 huge near camera
+    {cycles: 32,  tasks: []},  // 2  lod 2 minimap
+    {cycles: 64,  tasks: []},  // 3  individual hexes
+    {cycles: 128, tasks: []}   // 4  slowly load past camera
   ];
 
   /**
@@ -891,20 +935,92 @@ class ChunkStorage {
       case 'CELL_UPD':
         break;
     }
-  }
+  }  
     
   /**
-   * request all visible hexes inside bounding box
-   * @param {BoundingBox} bounding_box 
+   * Request all visible hexes inside bounding box
+   * @param {BoundingBox} - bounding_box 
    */
   static requestAllVisible(bounding_box) {
-    // check how many chunks 
-    // prioritize those in center
-  // TODO(ivan): not finished
+    const minX = bounding_box.minX - 1;
+    const minY = bounding_box.minY;
+    const maxX = bounding_box.maxX + 1;
+    const maxY = bounding_box.maxY + 1;
+
+    const minChunkX = Chunk.colHexCol(minX);
+    const maxChunkX = Chunk.colHexCol(maxX);
+    const minChunkY = Chunk.rowHexRow(minY);
+    const maxChunkY = Chunk.rowHexRow(maxY);
+
+    for (let col = minChunkX; col <= maxChunkX; ++col) {
+      for (let row = minChunkY; row <= maxChunkY; ++row) {
+        if (!ChunkStorage.isLoaded(col, row)) {
+          ChunkStorage.requestChunk(col, row);
+        }
+      }
+    }
+  }
+  
+  /**
+   * Returns the chunk cells.
+   * @param {number} col - chunk col
+   * @param {number} row - chunk row
+   */
+  static cellsColRow(col, row) {
   }
 
-  static requestChunk(col, row) {
-  // TODO(ivan): not finished
+  /**
+   * Returns the chunk cells.
+   * @param {number} col - chunk col
+   * @param {number} row - chunk row
+   */
+  static cellsChunk(chunk) {
+  }
+
+  /**
+   * Checks is chunk loaded?
+   */
+  static isLoaded(col, row) {
+    const key = `${col},${row}`;
+    const storage = ChunkStorage.storage;
+    return storage.has(key);
+  }
+  
+  /**
+   * Send request to the server for a chunk, write it to storage.
+   * @returns {Response} - the result of operation
+   */
+  static async requestChunk(col, row) {
+    const key = `${col},${row}`;
+    const response = await fetch(`api/boards/${board_id}/chunks?col=${col}&row=${row}`);
+    if (!response.ok) {
+      return response;
+    }
+
+    const points = await response.json();
+
+    let chunk;
+    if (!ChunkStorage.isLoaded(col, row)) {
+      chunk = new Array(Chunk.SIZE * Chunk.SIZE).fill(null);
+      for (let i = 0; i < chunk.length; ++i) {
+        chunk[i] = new HexInfo('loaded');
+      }
+      ChunkStorage.storage.set(key, chunk);
+    } else {
+      chunk = ChunkStorage.storage.get(key);
+    }
+
+    for (const point of points) {
+      const point_col = rem(point.cell_col, Chunk.SIZE);
+      const point_row = rem(point.cell_row, Chunk.SIZE);
+      const point_id = point_row * Chunk.SIZE + point_col;
+      chunk[point_id].type = 'task';
+      chunk[point_id].id = point.task_id;
+      chunk[point_id].completed = point.task_completed;
+      chunk[point_id].title = point.task_title;
+    }
+
+    return response;
   }
 
   static processInbox() {
@@ -916,11 +1032,36 @@ class ChunkStorage {
 
   /**
    * Retrieves hex info from oddq coordinates.
-   * @param {HexOddQ} - coordinates
+   * @param {HexOddQ} - oddq coordinates
    * @param {?HexInfo} target - reuse 
+   * @returns {HexInfo} - info on given hex
    */
-  static getHexInfo(hex, target) {
-    
+  static getHexInfoOddQ(hex, target=null) {
+    return ChunkStorage.getHexInfoColRow(hex.col, hex.row, target);
+  }
+
+  /**
+   * Retrieves hex info from oddq coordinates.
+   * @param {number} col - column of hex in oddq coords
+   * @param {number} row - row of hex in oddq coords
+   * @param {?HexInfo} target - reuse 
+   * @returns {HexInfo} - info on given hex
+   */
+  static getHexInfoColRow(col, row, target=null) {
+    // set stub if nothing
+    const result = HexInfo.recOrNew(target, 'loading');
+    // locate chunk
+    const chunk = Chunk.fromColRow(col, row);
+    const key = `${chunk.col},${chunk.row}`;
+    // find the id of hex in array
+    const in_hex_col = rem(col, Chunk.SIZE);
+    const in_hex_row = rem(row, Chunk.SIZE);
+    const hex_id = in_hex_row * Chunk.SIZE + in_hex_col;
+    // copy if there is anything
+    if (ChunkStorage.storage.has(key)) {
+      ChunkStorage.storage.get(key)[hex_id].copyTo(result);
+    }
+    return result;
   }
 
   static updateStatus(hex) {
@@ -1406,33 +1547,72 @@ function draw_grid() {
 }
 
 function calculate_color(hex) {
-  let value = from_chunk(hex);
-  let below, left, right;
+  const row = hex.row;
+  const col = hex.col;
 
-  if (hex.col & 1) {
-    below = from_chunk({'col': hex.col, 'row': hex.row + 1});
-    left  = from_chunk({'col': hex.col - 1, 'row': hex.row + 1});
-    right = from_chunk({'col': hex.col + 1, 'row': hex.row + 1});
+  // NOTE(ivan): I will reuse this
+  const info = ChunkStorage.getHexInfoOddQ(hex);
+
+  // okay we do it right there
+  const current_status    = info.status;
+  const current_completed = info.completed;
+  const current_is_empty  = info.type === "empty";
+  
+  let below_col, left_col, right_col;
+  let below_row, left_row, right_row;
+
+  // okay get them
+  if (col & 1) {
+    below_col = col;
+    below_row = row + 1;
+    
+    left_col  = col - 1;
+    left_row  = row + 1;
+
+    right_col = col + 1;
+    right_row = row + 1;
   } else {
-    below = from_chunk({'col': hex.col, 'row': hex.row + 1});
-    left  = from_chunk({'col': hex.col - 1, 'row': hex.row});
-    right = from_chunk({'col': hex.col + 1, 'row': hex.row});
+    below_col = col;
+    below_row = row + 1;
+
+    left_col  = col - 1;
+    left_row  = row;
+
+    right_col = col + 1;
+    right_row = row;
   }
+
+  let below_status, left_status, right_status;
+  let below_completed, left_completed, right_completed;
+  let below_is_empty, left_is_empty, right_is_empty;
+
+  ChunkStorage.getHexInfoColRow(below_col, below_row, info);
+  below_status    = info.status;
+  below_completed = info.completed;
+  below_is_empty  = info.type === "empty";
+  ChunkStorage.getHexInfoColRow(left_col, left_row, info);
+  left_status    = info.status;
+  left_completed = info.completed;
+  left_is_empty  = info.type === "empty";
+  ChunkStorage.getHexInfoColRow(right_col, right_row, info);
+  right_status    = info.status;
+  right_completed = info.completed;
+  right_is_empty  = info.type === "empty";
 
   let calculated_color;
 
-  let all_loaded = value !== null
-                && below !== null
-                && left  !== null
-                && right !== null;
+  const all_loaded = current_status !== 'loading'
+                  && below_status   !== 'loading'
+                  && left_status    !== 'loading'
+                  && right_status   !== 'loading';
 
   if (all_loaded) {
-    let unlocked = (below === undefined  || below.completed)
-                && (left  === undefined  || left.completed )
-                && (right === undefined  || right.completed);
-    if (value === undefined) {
+    const unlocked = (below_is_empty || below_completed)
+                  && ( left_is_empty ||  left_completed)
+                  && (right_is_empty || right_completed);
+    if (current_is_empty) {
       calculated_color = EMPTY;
-    } else if (value.completed) {
+    } else if (current_completed) {
       calculated_color = DONE;
     } else if (unlocked) {
       calculated_color = TODO;
@@ -1446,44 +1626,18 @@ function calculate_color(hex) {
   return calculated_color;
 }
 
-function draw_hexagon(text="lol", style='transparent') {
-  ctx.save()
-
-  ctx.strokeStyle = 'black';
-  ctx.lineWidth = 0.25;
-  ctx.fillStyle = style;
-  let turns = 6;
-  let angle = 2 * Math.PI / turns;
-  ctx.translate(-size * Math.cos(angle), -size * Math.sin(angle));
-  ctx.beginPath()
-  for (let i = 0; i < 6; i += 1) {
-    ctx.lineTo(size, 0);
-    ctx.translate(size, 0);
-    ctx.rotate(angle);
-  }
-  ctx.closePath();
-  ctx.translate(size * Math.cos(angle), size * Math.sin(angle));
-  ctx.stroke();
-  ctx.fill();
-  ctx.font = `${size / 3}px Arial`; // Adjust font size as needed to fit the circle
-  ctx.fillStyle = 'black';
-  ctx.textAlign = 'center'; // Center the text horizontally
-  ctx.textBaseline = 'middle'; // Center the text vertically
-  ctx.fillText(text, 0, 0);
-  ctx.restore();
-}
-
 function draw_animation_frame() {
   canvas.width = canvas.clientWidth;
   canvas.height = canvas.clientHeight;
 
   // update camera fovX, fovY automatically
-  camera.width  =  canvas.width  / 30;
-  camera.height =  canvas.height / 30;
+  camera.width  =  canvas.width  / Render.SCALE;
+  camera.height =  canvas.height / Render.SCALE;
   
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   draw_grid();
 }
+
 let canvasFrame = null;
 
 let UI_event_queue = [];
@@ -1843,6 +1997,7 @@ function loop() {
 
   process_pending_UI_events();
   draw_animation_frame();
+  ChunkStorage.requestAllVisible(cull_hexes(camera, canvas));
 
   {
     cam_debug.textContent = `cam(${camera.x.toFixed(5)}, ${camera.y.toFixed(5)}, ${camera.z.toFixed(5)})`;
