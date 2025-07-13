@@ -424,8 +424,6 @@ function update_active_list(new_list) {
   }
 }
 
-let size = 30
-
 let under_cursor = {
   hex: new HexOddQ(0, 0),
   time: 0
@@ -1403,7 +1401,7 @@ class Render {
     return Vec2.recOrNew(target, screen_x, screen_y);
   }
   
-  static path_nagon(n) {
+  static path_nagon(n, size) {
     const ctx = Render.ctx;
     const turns = n;
     const angle = 2 * Math.PI / turns;
@@ -1433,7 +1431,7 @@ class Render {
     {
       ctx.translate(screen_x, screen_y);
       // create path for hexagon and stroke / fill it
-      Render.path_nagon(6);
+      Render.path_nagon(6, size);
       ctx.strokeStyle = 'black';
       ctx.lineWidth = 0.25 * unit;
       ctx.fillStyle = style;
@@ -1771,6 +1769,7 @@ function process_pending_UI_events() {
         break;
       }
       case 'REQUEST_DRAG_START': {
+        const size = Render.SCALE * camera.z0UnitScale;
         const drag_transform = {
           get x() {
             return (this.savedPageX - this.pageX) / size;
@@ -1883,7 +1882,6 @@ function process_pending_UI_events() {
       }
       case 'REQUEST_CAMERA_ZOOM': {
         camera.z0UnitScale += event.delta / 3000;
-        size = camera.z0UnitScale * 30;
         register_event('CAMERA_ZOOMED', {});
         break;
       }
@@ -1981,8 +1979,7 @@ function loop() {
   {
     cam_debug.textContent = `cam(${camera.x.toFixed(5)}, ${camera.y.toFixed(5)}, ${camera.z.toFixed(5)})`;
     const bb = camera.visiblePlane(0);
-    const x = bb.minX * size;
-    const y = bb.minY * size;
+    const size = camera.z0UnitScale * Render.SCALE;
     const width =  (bb.maxX - bb.minX) * size;
     const height = (bb.maxY - bb.minY) * size;
 
