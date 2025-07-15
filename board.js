@@ -952,8 +952,8 @@ class ChunkStorage {
 
     for (let col = minChunkX; col <= maxChunkX; ++col) {
       for (let row = minChunkY; row <= maxChunkY; ++row) {
-        if (!ChunkStorage.isLoaded(col, row)) {
-          ChunkStorage.requestChunk(col, row);
+        if (!ChunkStorage.isLoaded(col, row) && !ChunkStorage.isLoading(col, row)) {
+          ChunkStorage.requestChunk(col, row)
         }
       }
     }
@@ -983,6 +983,15 @@ class ChunkStorage {
     const storage = ChunkStorage.storage;
     return storage.has(key);
   }
+
+  /**
+   * Checks is chunk loading?
+   */
+  static isLoading(col, row) {
+    const key = `${col},${row}`;
+    const loading = ChunkStorage.loading;
+    return loading.has(key);
+  }
   
   /**
    * Send request to the server for a chunk, write it to storage.
@@ -990,35 +999,61 @@ class ChunkStorage {
    */
   static async requestChunk(col, row) {
     const key = `${col},${row}`;
-    const response = await fetch(`api/boards/${board_id}/chunks?col=${col}&row=${row}`);
-    if (!response.ok) {
-      return response;
+
+    const loading = ChunkStorage.loading;
+    const storage = ChunkStorage.storage;
+
+    // abort pending request to same place
+    const old = loading.get(key);
+    if (old !== undefined) {
+      old.abort();
     }
+    // set own abort switch
+    const controller = new AbortController();
+    const signal = controller.signal;
+    loading.set(key, controller);
 
-    const points = await response.json();
+    try { 
+      const response = await fetch(`api/boards/${board_id}/chunks?col=${col}&row=${row}`, {signal});
 
-    let chunk;
-    if (!ChunkStorage.isLoaded(col, row)) {
-      chunk = new Array(Chunk.SIZE * Chunk.SIZE).fill(null);
-      for (let i = 0; i < chunk.length; ++i) {
-        chunk[i] = new HexInfo('loaded');
+      if (!response.ok) {
+        return response;
       }
-      ChunkStorage.storage.set(key, chunk);
-    } else {
-      chunk = ChunkStorage.storage.get(key);
-    }
 
-    for (const point of points) {
-      const point_col = rem(point.cell_col, Chunk.SIZE);
-      const point_row = rem(point.cell_row, Chunk.SIZE);
-      const point_id = point_row * Chunk.SIZE + point_col;
-      chunk[point_id].type = 'task';
-      chunk[point_id].id = point.task_id;
-      chunk[point_id].completed = point.task_completed;
-      chunk[point_id].title = point.task_title;
-    }
+      /** @type {Array} points */
+      const points = await response.json();
+      
+      /**  @type {HexInfo[]} chunk */
+      let chunk;
+      if (!ChunkStorage.isLoaded(col, row)) {
+        chunk = new Array(Chunk.SIZE * Chunk.SIZE).fill(null);
+        for (let i = 0; i < chunk.length; ++i) {
+          chunk[i] = new HexInfo('loaded');
+        }
+        storage.set(key, chunk);
+      } else {
+        chunk = storage.get(key);
+      }
 
-    return response;
+      // set them to be empty 
+      chunk.forEach(info => HexInfo.rec(info, 'loaded'));
+      // set values
+      for (const point of points) {
+        const point_col = rem(point.cell_col, Chunk.SIZE);
+        const point_row = rem(point.cell_row, Chunk.SIZE);
+        const point_id = point_row * Chunk.SIZE + point_col;
+        chunk[point_id].type = 'task';
+        chunk[point_id].id = point.task_id;
+        chunk[point_id].completed = point.task_completed;
+        chunk[point_id].title = point.task_title;
+      }
+      return response;
+    } finally {
+      // remove from loading, since we succeeded or have failed
+      if (loading.get(key) === controller) {
+        loading.delete(key);
+      }
+    }
   }
 
   static processInbox() {
@@ -1068,6 +1103,7 @@ class ChunkStorage {
 
   // TODO(ivan): not finished
   static storage = new Map();
+  static loading = new Map();
 }
 
 /**
