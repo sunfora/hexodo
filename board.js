@@ -1335,50 +1335,6 @@ function cull_hexes(camera, canvas, target=null) {
   return BoundingBox.fromTwoHexes(top_left_hex, bot_right_hex, target);
 }
 
-function from_chunk(hex) {
-  let pos = chunk_coords(hex);
-  let key = `${pos.col}, ${pos.row}`;
-  if (chunk.has(key) && chunk.get(key).loaded) {
-    return chunk.get(key).data[`${hex.col}, ${hex.row}`];
-  } else if (requests_made > 4 || Date.now() < global_timeout) {
-    return null;
-  } else if (chunk.has(key) && Date.now() < chunk.get(key).timeout) {
-    return null; 
-  } else {
-    global_timeout = Date.now() + 100
-    chunk.set(key, {
-      loaded: false,
-      timeout: Date.now() + 10000,
-      data: null
-    });
-    requests_made += 1;
-    fetch(`api/boards/${board_id}/chunks?col=${pos.col}&row=${pos.row}`).then((response) => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return response.json();
-    }).then((data) => {
-      let result = {}
-      for (const point of data) {
-        result[`${point.cell_col}, ${point.cell_row}`] = {
-          'id': point.task_id,
-          'completed': point.task_completed,
-          'title': point.task_title,
-          'col': point.cell_col,
-          'row': point.cell_row
-        }
-      }
-      chunk.get(key).data = result
-      chunk.get(key).loaded = true;
-      requests_made -= 1;
-    }).catch( (error) => {
-      console.log(error);
-      requests_made -= 1;
-    })
-    return null;
-  }
-}
-
 /**
  * here goes everything that is render specific
  * for example default render scale
@@ -1529,21 +1485,22 @@ function draw_grid() {
   let new_locked = [];
   
   let hex = new HexOddQ(0, 0);
-
+  let info = new HexInfo();
+  // draw color
   for (let row = bounding_box.minY; row <= bounding_box.maxY; row++) {
     for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
       // reuse hex
       HexOddQ.rec(hex, col, row);
 
-      let value = from_chunk(hex);
-      let calculated_color = calculate_color(hex);
+      let calculated_color = calculate_color(hex, info);
+      let value = ChunkStorage.getHexInfoOddQ(hex, info);
 
       if (calculated_color === DONE) {
-        new_done.push(value);
+        new_done.push({...value, ...hex});
       } else if (calculated_color === TODO) {
-        new_active.push(value);
+        new_active.push({...value, ...hex});
       } else if (calculated_color === LOCKED) {
-        new_locked.push(value);
+        new_locked.push({...value, ...hex});
       }
 
       if (hex.equals(under_cursor.hex)) {
@@ -1559,12 +1516,12 @@ function draw_grid() {
   update_lists(new_active, new_done, new_locked);
 }
 
-function calculate_color(hex) {
+function calculate_color(hex, reuse=null) {
   const row = hex.row;
   const col = hex.col;
 
   // NOTE(ivan): I will reuse this
-  const info = ChunkStorage.getHexInfoOddQ(hex);
+  const info = ChunkStorage.getHexInfoOddQ(hex, reuse);
 
   // okay we do it right there
   const current_status    = info.status;
