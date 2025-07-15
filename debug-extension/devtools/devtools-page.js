@@ -250,7 +250,7 @@ async function handleDebuggerEvent(source, method, params) {
 
                 const { result, exceptionDetails } = await chrome.debugger.sendCommand(
                     { tabId: currentTabId },
-                    "Runtime.evaluate",
+                    "Debugger.evaluateOnCallFrame",
                     evaluateParams
                 );
                 console.log(result);
