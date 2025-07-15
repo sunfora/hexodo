@@ -12,9 +12,6 @@ import {
   Vec2
 } from "./coords.js";
 
-"use strict" 
-
-
 const board_id = window.appConfig.board.board_id;
 const user_name = window.appConfig.user_id;
 
