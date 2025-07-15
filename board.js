@@ -1312,7 +1312,7 @@ class BoundingBox {
  * Cull the visible hexes on the screen.
  * Usage: for rendering purposes, for fetching relevant data.
  */
-function cull_hexes(camera, canvas, target=null) {
+function cull_hexes(camera, target=null) {
   let top_left_hex;
   let bot_right_hex;
   
@@ -1345,18 +1345,20 @@ class Render {
    * USAGE(ivan): basically you transform logical coordianates to pixels this way.
    */
   static SCALE = 30;
+  static DPR = window.devicePixelRatio;
+
   static camera = camera;
 
   /**
    * The canvas to draw to.
    * @type {HTMLCanvasElement}
    */
-  static canvas = document.getElementById('hex-grid');
+  static screen = document.getElementById('hex-grid');
   /**
    * The current active canvas contex.
    * @type {CanvasRenderingContext2D} ctx
    */
-  static ctx = Render.canvas.getContext('2d');
+  static screen_ctx = Render.screen.getContext('2d');
 
   /**
    * Translate clientX, clientY to logical coordinates on plane with height z
@@ -1368,10 +1370,10 @@ class Render {
   static xy_client_to_plane(client_x, client_y, plane_z=0, target=null) {
     const camera = Render.camera;
     const pixel_scale = camera.getUnitScale(plane_z) * Render.SCALE;
-    let {x: canvas_x, y: canvas_y} = Render.canvas.getBoundingClientRect();
+    let {x: canvas_x, y: canvas_y} = Render.screen.getBoundingClientRect();
 
-    let global_x = camera.x - (canvas_x - client_x + Render.canvas.width  / 2) / pixel_scale;
-    let global_y = camera.y - (canvas_y - client_y + Render.canvas.height / 2) / pixel_scale;
+    let global_x = camera.x - ((canvas_x - client_x) * Render.DPR + Render.screen.width  / 2) / pixel_scale;
+    let global_y = camera.y - ((canvas_y - client_y) * Render.DPR + Render.screen.height / 2) / pixel_scale;
     return Vec2.recOrNew(target, global_x, global_y);
   }
 
@@ -1384,17 +1386,36 @@ class Render {
    * @returns {Vec2} coordinates on screen
    */
   static xyz_to_screen(x, y, z, target=null) {
+    return Render.xyz_to_buffer(x, y, z, Render.screen, target);
+  }
+
+  /**
+   * @param {number} x - x logical coord
+   * @param {number} y - y logical coord
+   * @param {number} z - z logical coord
+   * @param {HTMLCanvasElement} buffer - texture buffer
+   * @param {?Vec2}  target - reuse object
+   *
+   * @returns {Vec2} coordinates on buffer
+   */
+  static xyz_to_buffer(x, y, z, buffer, target=null) {
     const camera = Render.camera;
     const pixel_scale = camera.getUnitScale(z) * Render.SCALE;
 
-    const screen_x = (x - camera.x) * pixel_scale + Render.canvas.width  / 2;
-    const screen_y = (y - camera.y) * pixel_scale + Render.canvas.height / 2;
+    const buffer_x = (x - camera.x) * pixel_scale + buffer.width  / 2;
+    const buffer_y = (y - camera.y) * pixel_scale + buffer.height / 2;
 
-    return Vec2.recOrNew(target, screen_x, screen_y);
+    return Vec2.recOrNew(target, buffer_x, buffer_y);
+  }
+
+  static path_hexagon(ctx, size) {
+    Render.path_nagon(ctx, 6, size);
   }
   
-  static path_nagon(n, size) {
-    const ctx = Render.ctx;
+  /**
+   * @param {CanvasRenderingContext2D} ctx - context
+   */
+  static path_nagon(ctx, n, size) {
     const turns = n;
     const angle = 2 * Math.PI / turns;
 
@@ -1410,12 +1431,164 @@ class Render {
   }
 
   /**
+   * @type {HTMLCanvasElement} outlineBuffer;
+   */
+  static outline_buffer = document.createElement('canvas');
+  /**
+   * @type {CanvasRenderingContext2D} outline_ctx
+   */
+  static outline_ctx = Render.outline_buffer.getContext('2d');
+  static outline_unit = null;
+  /**
+   * fast logarithmic outline drawing
+   */
+  static draw_outline(z) {
+    const buffer = Render.outline_buffer;
+    const ctx    = Render.outline_ctx;
+
+
+    const camera = Render.camera;
+    
+    const prev = Render.outline_unit;
+    const unit = camera.getUnitScale(z);
+    const line_width = 0.75 * unit;
+
+
+    // find how many iterations I need 
+    const bb       = cull_hexes(camera);
+
+    // now we need to calculate the size of the individual tile
+    // so that we would seamlessly repeat them
+    const hexagon_size        = unit * Render.SCALE;
+    const hexagon_height      = hexagon_size * Math.sqrt(3)
+    const hexagon_width       = hexagon_size * 2;
+
+    const tile_width  = 3 * hexagon_size;
+    const tile_height = hexagon_height;
+
+    const tile_center_x =  tile_width / 2;
+    const tile_center_y = tile_height / 2;
+    
+    // set up the buffer to the proper height/width
+    // if scaling has not changed more than twice a size
+    // then reuse
+    if (prev && prev / unit < 1.5 && unit / prev < 1.5) {
+      const hex = new HexOddQ(bb.minX, bb.minY);
+      const vec = oddq_to_vec2(hex);
+      const hex_center_screen = Render.xyz_to_screen(vec.x, vec.y, z, buffer)
+      Render.screen_ctx.drawImage(buffer,
+        0, 0, 
+        (Render.screen.width  + hexagon_width  * 4) * (prev/unit), 
+        (Render.screen.height + hexagon_height * 4) * (prev/unit), 
+        hex_center_screen.x - tile_center_x,
+        hex_center_screen.y - tile_center_y,
+        Render.screen.width  + hexagon_width  * 4, 
+        Render.screen.height + hexagon_height * 4, 
+      )
+      return;
+    }
+    Render.outline_unit = unit;
+    buffer.width  = Math.round(Render.screen.width  * 2 + hexagon_width  * 4);
+    buffer.height = Math.round(Render.screen.height * 2 + hexagon_height * 4);
+    ctx.clearRect(0, 0, buffer.width, buffer.height);
+    
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = line_width;
+    ctx.imageSmoothingEnabled = false;
+    // draw one tile
+    function draw_one_tile(x, y) {
+      ctx.save()
+      // set up the ctx
+      // draw hexagon
+      ctx.translate(x + tile_center_x, y + tile_center_y);
+      // draw `arms`
+      ctx.beginPath()
+
+      ctx.moveTo(-3 * hexagon_size / 2,                   0);
+      ctx.lineTo(-2 * hexagon_size / 2,                   0);
+
+      ctx.moveTo(-2 * hexagon_size / 2,                   0);
+      ctx.lineTo(-1 * hexagon_size / 2,  hexagon_height / 2);
+
+      ctx.moveTo(-2 * hexagon_size / 2,                   0);
+      ctx.lineTo(-1 * hexagon_size / 2, -hexagon_height / 2);
+
+      ctx.moveTo(-1 * hexagon_size / 2,  hexagon_height / 2);
+      ctx.lineTo( 1 * hexagon_size / 2,  hexagon_height / 2);
+
+      ctx.moveTo( 1 * hexagon_size / 2,  hexagon_height / 2);
+      ctx.lineTo( 2 * hexagon_size / 2,                   0);
+
+      ctx.moveTo( 2 * hexagon_size / 2,                   0);
+      ctx.lineTo( 3 * hexagon_size / 2,                   0);
+
+      ctx.moveTo( 2 * hexagon_size / 2,                   0);
+      ctx.lineTo( 1 * hexagon_size / 2, -hexagon_height / 2);
+
+      ctx.stroke();
+      ctx.restore();
+    }
+    
+    //ctx.save();
+    //ctx.beginPath();
+    //ctx.rect(0, 0, Math.round(16 * tile_width), Math.round(16 * tile_height));
+    //ctx.clip();
+    for (let w = 0; w < 16; w += 1) {
+      for (let h = 0; h < 16; h += 1) {
+        draw_one_tile(w * tile_width, h * tile_height);
+      }
+    }
+    //ctx.restore();
+
+    // draw tiles
+    {
+      let current_width  = Math.round(16 * tile_width);
+      let current_height = Math.round(16 * tile_height);
+      while (current_width < buffer.width || current_height < buffer.height) {
+        // do 3 drawing calls
+        ctx.drawImage(buffer, 
+          0, 0, 
+          current_width, current_height,
+          current_width, 0, 
+          current_width, current_height
+        );
+        ctx.drawImage(buffer, 
+          0, 0, 
+          current_width, current_height,
+                      0, current_height, 
+          current_width, current_height
+        );
+        ctx.drawImage(buffer, 
+          0, 0, 
+          current_width, current_height,
+          current_width, current_height, 
+          current_width, current_height
+        );
+
+        current_width  *= 2;
+        current_height *= 2;
+      }
+    }
+
+    // finally output it to the screen
+    const hex = new HexOddQ(bb.minX, bb.minY);
+    const vec = oddq_to_vec2(hex);
+    const hex_center_screen = Render.xyz_to_screen(vec.x, vec.y, z, buffer)
+    Render.screen_ctx.drawImage(buffer,
+      0, 0, buffer.width, buffer.height,
+      hex_center_screen.x - tile_center_x,
+      hex_center_screen.y - tile_center_y,
+      buffer.width, buffer.height
+    )
+  }
+
+  /**
    * draw hexagon with specified color and text using cartesian coordinates
    */
-  static draw_hexagon_xyz(x, y, z=0, style="transparent", text="") {
+  static draw_hexagon_xyz(x, y, z=0, operation) {
     const {x: screen_x, y: screen_y} = Render.xyz_to_screen(x, y, z);
 
-    const ctx  = Render.ctx;
+    const ctx  = Render.screen_ctx;
     const unit = Render.camera.getUnitScale(z); 
     const size = Render.SCALE * Render.camera.getUnitScale(z);
 
@@ -1423,19 +1596,8 @@ class Render {
     {
       ctx.translate(screen_x, screen_y);
       // create path for hexagon and stroke / fill it
-      Render.path_nagon(6, size);
-      ctx.strokeStyle = 'black';
-      ctx.lineWidth = 0.25 * unit;
-      ctx.fillStyle = style;
-      ctx.stroke();
-      ctx.fill();
-
-      // now add text there 
-      ctx.font = `${size / 3}px Arial`; // Adjust font size as needed to fit the circle
-      ctx.fillStyle = 'black';
-      ctx.textAlign = 'center'; // Center the text horizontally
-      ctx.textBaseline = 'middle'; // Center the text vertically
-      ctx.fillText(text, 0, 0);
+      Render.path_hexagon(ctx, size);
+      operation(ctx, unit, size)
     }
     ctx.restore();
   }
@@ -1443,11 +1605,13 @@ class Render {
   /**
    * draw hexagon with specified color and text using oddq coordinates
    */
-  static draw_hexagon_oddq(hex, z=0, style="transparent", text="") {
+  static draw_hexagon_oddq(hex, z, operation, buffer=Render.screen) {
     const {x: x, y: y} = oddq_to_vec2(hex);
-    Render.draw_hexagon_xyz(x, y, z, style, text);
+    Render.draw_hexagon_xyz(x, y, z, operation, buffer);
   }
 }
+
+Render.screen_ctx.scale(Render.DPR, Render.DPR);
 
 const EMPTY    = { r: 255, g: 255, b: 255 }; // white
 const SELECTED = { r: 255, g: 215, b: 0   }; // gold
@@ -1509,10 +1673,39 @@ function draw_grid() {
       } else if (hex.equals(selected.hex)) {
         let nt = Math.abs(Math.sin(Date.now() / 500));
         calculated_color = lerp_color(calculated_color, SELECTED, nt);
-      }         
-      Render.draw_hexagon_oddq(hex, 0, color_to_style(calculated_color), `${hex.col} ${hex.row}`);
+      }
+
+      if (calculated_color !== EMPTY) {
+        Render.draw_hexagon_oddq(hex, 0, (ctx) => {
+          ctx.fillStyle = color_to_style(calculated_color);
+          ctx.fill();
+        });
+      }
     }
   }
+  // draw text
+  if (camera.z <= 2) {
+    // draw text
+    //
+    const size = camera.z0UnitScale * Render.SCALE;
+    ctx.font = `${size/3}px Arial`; // Adjust font size as needed to fit the circle
+    ctx.fillStyle = 'black';
+    ctx.textAlign = 'center'; // Center the text horizontally
+    ctx.textBaseline = 'middle'; // Center the text vertically
+    for (let row = bounding_box.minY; row <= bounding_box.maxY; row++) {
+      for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
+        // reuse hex
+        HexOddQ.rec(hex, col, row);
+        Render.draw_hexagon_oddq(hex, 0, (ctx, unit, size) => {
+          const text = `${hex.col} ${hex.row}`;
+          // now add text there 
+          ctx.fillText(text, 0, 0);
+        })
+      }
+    }
+  }
+
+  Render.draw_outline(0);
   update_lists(new_active, new_done, new_locked);
 }
 
@@ -1597,8 +1790,8 @@ function calculate_color(hex, reuse=null) {
 }
 
 function draw_animation_frame() {
-  canvas.width = canvas.clientWidth;
-  canvas.height = canvas.clientHeight;
+  canvas.width  = canvas.clientWidth  * Render.DPR;
+  canvas.height = canvas.clientHeight * Render.DPR;
 
   // update camera fovX, fovY automatically
   camera.width  =  canvas.width  / Render.SCALE;
