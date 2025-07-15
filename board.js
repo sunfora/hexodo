@@ -565,20 +565,20 @@ let under_cursor = {
 
 let selected = {
   hex: new HexOddQ(0, 0),
+  info: new HexInfo()
 }
 
 function update_form(header_message) {
-  title.value = selected.title;
-  description.value = selected.description;
-  description.value = selected.description;
-  completed.checked = selected.completed;
+  title.value        = selected.info.title;
+  description.value  = selected.info.description;
+  completed.checked  = selected.info.completed;
   header.textContent = header_message;
 }
 
 function update_selected() {
-  selected.title = title.value;
-  selected.description = description.value;
-  selected.completed = completed.checked;
+  selected.info.title       = title.value;
+  selected.info.description = description.value;
+  selected.info.completed   = completed.checked;
 }
 
 let camera = new Camera();
@@ -593,38 +593,28 @@ async function request_cell_remove(which) {
 }
 
 function stub_task() {
-  return {
-    'id': null,
-    'title': 'New task',
-    'description': 'description',
-    'completed': false
-  };
+  return new HexInfo('loaded', null, 'task', 'New task', false, 'description');
 }
 
 function form_new_task() {
-  copy_task_to(stub_task(), selected);
+  stub_task().copyTo(selected.info);
   update_form('Create task');
 }
 
-function copy_task_to(src, dest) {
-  dest.title       = src.title;
-  dest.id          = src.id;
-  dest.description = src.description;
-  dest.completed   = src.completed;
-}
-
 function form_edit_task(task) {
-  copy_task_to(task, selected);
-  update_form(`Edit task: ${selected.id}`);
+  task.copyTo(selected.info);
+  update_form(`Edit task: ${selected.info.id}`);
 }
 
 function task_from_backend(backend_data) {
-  return {
-    'title':       backend_data.task_title,
-    'id':          backend_data.task_id,
-    'description': backend_data.task_description,
-    'completed':   backend_data.task_completed
-  };
+  return new HexInfo(
+    'loaded',
+    backend_data.task_id,
+    'task',
+    backend_data.task_title,
+    backend_data.task_completed,
+    backend_data.task_description
+  );
 }
 
 function update_form_with_new_task(task) {
@@ -656,20 +646,6 @@ async function request_hex(hex) {
     console.log('during request_hex: ', error);
   }
 }
-
-
-
-let chunk = new Map();
-
-function chunk_coords(hex) {
-  return {
-    col : (hex.col - ((hex.col % 10 + 10) % 10)) / 10,
-    row : (hex.row - ((hex.row % 10 + 10) % 10)) / 10
-  };
-}
-
-let requests_made = 0;
-let global_timeout = 0;
 
 /**
  * struct Chunk(col: number, row: number)
@@ -1038,9 +1014,7 @@ class ChunkStorage {
       chunk.forEach(info => HexInfo.rec(info, 'loaded'));
       // set values
       for (const point of points) {
-        const point_col = rem(point.cell_col, Chunk.SIZE);
-        const point_row = rem(point.cell_row, Chunk.SIZE);
-        const point_id = point_row * Chunk.SIZE + point_col;
+        const point_id = ChunkStorage.hexID(point.cell_col, point.cell_row);
         chunk[point_id].type = 'task';
         chunk[point_id].id = point.task_id;
         chunk[point_id].completed = point.task_completed;
@@ -1072,6 +1046,49 @@ class ChunkStorage {
     return ChunkStorage.getHexInfoColRow(hex.col, hex.row, target);
   }
 
+  static hexID(col, row) {
+    const in_hex_col = rem(col, Chunk.SIZE);
+    const in_hex_row = rem(row, Chunk.SIZE);
+    const hex_id = in_hex_row * Chunk.SIZE + in_hex_col;
+    return hex_id;
+  }
+
+  static refChunkColRow(col, row) {
+    const chunk = Chunk.fromColRow(col, row);
+    const key = `${chunk.col},${chunk.row}`;
+    return ChunkStorage.storage.get(key);
+  }
+  
+  static hexLoaded(hex) {
+    const chunk = Chunk.fromHexOddQ(hex);
+    return ChunkStorage.isLoaded(chunk.col, chunk.row);   
+  }
+
+  static hexLoadedColRow(col, row) {
+    const chunk = Chunk.fromColRow(col, row);
+    return ChunkStorage.isLoaded(chunk.col, chunk.row);   
+  }
+
+  static updateHexInfo(hex, info) {
+    ChunkStorage.updateHexInfoColRow(hex.col, hex.row, info);
+  }
+
+  static updateHexInfoColRow(col, row, info) {
+    const chunk = ChunkStorage.refChunkColRow(col, row);
+    const id    = ChunkStorage.hexID(col, row);
+    if (chunk) {
+      info.copyTo(chunk[id]);
+    } else {
+      console.error("not loaded"); 
+    }
+  }
+  
+  static EMPTY = new HexInfo('loaded')
+
+  static removeCell(col, row) {
+    ChunkStorage.updateHexInfoColRow(col, row, ChunkStorage.EMPTY);
+  }
+
   /**
    * Retrieves hex info from oddq coordinates.
    * @param {number} col - column of hex in oddq coords
@@ -1086,9 +1103,7 @@ class ChunkStorage {
     const chunk = Chunk.fromColRow(col, row);
     const key = `${chunk.col},${chunk.row}`;
     // find the id of hex in array
-    const in_hex_col = rem(col, Chunk.SIZE);
-    const in_hex_row = rem(row, Chunk.SIZE);
-    const hex_id = in_hex_row * Chunk.SIZE + in_hex_col;
+    const hex_id = ChunkStorage.hexID(col, row);
     // copy if there is anything
     if (ChunkStorage.storage.has(key)) {
       ChunkStorage.storage.get(key)[hex_id].copyTo(result);
@@ -1826,10 +1841,10 @@ let game = {
 async function save_selected() {
   const form_data = new URLSearchParams();
 
-  form_data.append('task_description', selected.description);
-  form_data.append('task_title', selected.title);
-  form_data.append('task_id', selected.id);
-  form_data.append('task_completed', selected.completed);
+  form_data.append('task_description', selected.info.description);
+  form_data.append('task_title',       selected.info.title);
+  form_data.append('task_id',          selected.info.id);
+  form_data.append('task_completed',   selected.info.completed);
   form_data.append('user_id', user_name); 
 
   const response = await fetch(`/api/boards/${board_id}/cells?row=${selected.hex.row}&col=${selected.hex.col}`, {
@@ -1844,10 +1859,8 @@ async function save_selected() {
   if (response.ok) {
     register_event()
     update_form_with_new_data(data);
-    let coords = chunk_coords(selected.hex);
-    chunk.get(`${coords.col}, ${coords.row}`).data[`${selected.hex.col}, ${selected.hex.row}`] = {
-      'id': selected.id,
-      'completed': selected.completed
+    if (ChunkStorage.hexLoaded(selected.hex))  {
+      ChunkStorage.updateHexInfo(selected.hex, selected.info);
     }
   }
 };
@@ -2098,10 +2111,10 @@ function process_pending_UI_events() {
         break;
       }
       case 'HEX_REMOVED': {
-        let coords = chunk_coords(event.hex);
-        let key = `${coords.col}, ${coords.row}`;
-        if (chunk.has(key)) {
-          delete chunk.get(key).data[`${event.hex.col}, ${event.hex.row}`];
+        const col = event.hex.col;
+        const row = event.hex.row;
+        if (ChunkStorage.hexLoadedColRow(col, row)) {
+          ChunkStorage.removeCell(col, row);
         }
         form_new_task();
         break;
