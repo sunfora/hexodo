@@ -1543,21 +1543,14 @@ class Render {
       ctx.restore();
     }
     
-    //ctx.save();
-    //ctx.beginPath();
-    //ctx.rect(0, 0, Math.round(16 * tile_width), Math.round(16 * tile_height));
-    //ctx.clip();
     for (let w = 0; w < 16; w += 1) {
       for (let h = 0; h < 16; h += 1) {
         draw_one_tile(w * tile_width, h * tile_height);
       }
     }
-    //ctx.restore();
-
-    // draw tiles
     {
-      let current_width  = Math.round(16 * tile_width);
-      let current_height = Math.round(16 * tile_height);
+      let current_width  = 16 * tile_width;
+      let current_height = 16 * tile_height;
       while (current_width < buffer.width || current_height < buffer.height) {
         // do 3 drawing calls
         ctx.drawImage(buffer, 
