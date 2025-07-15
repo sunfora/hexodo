@@ -1827,7 +1827,7 @@ function swap_event_buffers() {
 let game = {
   tool: 'drag',
   running: false,
-  controller: null
+  domEventsController: null
 };
 
 
@@ -1859,14 +1859,14 @@ async function save_selected() {
 };
 
 function wire_dom_events() {
-  if (game.controller) {
+  if (game.domEventsController) {
     console.error("trying to wire to dom, while already wired");
     return;
   }
 
   // register new abort controller
-  game.controller = new AbortController();
-  const signal = game.controller.signal;
+  game.domEventsController = new AbortController();
+  const signal = game.domEventsController.signal;
 
   //
   // override default behaviour
@@ -1932,12 +1932,12 @@ function wire_dom_events() {
 }
 
 function unwire_dom_events() {
-  if (game.controller === null) {
+  if (game.domEventsController === null) {
     console.error("nothing to unwire");
     return;
   }
-  game.controller.abort();
-  game.controller = null;
+  game.domEventsController.abort();
+  game.domEventsController = null;
 }
 
 function process_pending_UI_events() {
