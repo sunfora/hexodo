@@ -41,6 +41,143 @@ const completed = document.querySelector('#task-completed');
 
 
 /**
+ * struct HexInfo(
+ *    status?: string = "loading", 
+ *    id?: number = null,
+ *    type?: string = "empty", 
+ *    title?: string = null, 
+ *    completed?: boolean = false, 
+ *    description?: string = null
+ * ) 
+ */
+class HexInfo {
+  /**
+   * @param {string=} status
+   * @param {number=} id
+   * @param {string=} type
+   * @param {string=} title
+   * @param {boolean=} completed
+   * @param {string=} description
+   */
+  constructor(status, id, type, title, completed, description) {
+    this.status = status === undefined ? "loading" : status;
+    this.id = id === undefined ? null : id;
+    this.type = type === undefined ? "empty" : type;
+    this.title = title === undefined ? null : title;
+    this.completed = completed === undefined ? false : completed;
+    this.description = description === undefined ? null : description;
+  }
+
+  /** 
+   * Reuse the HexInfo.
+   * NOTE(ivan): unchecked, be sure it really is an object of proper type.
+   * @param {HexInfo} target 
+   * 
+   * @param {string=} status
+   * @param {number=} id
+   * @param {string=} type
+   * @param {string=} title
+   * @param {boolean=} completed
+   * @param {string=} description
+   */
+  static rec(target, status, id, type, title, completed, description) {
+    target.status = (status === undefined)? "loading" : status;
+    target.id = (id === undefined)? null : id;
+    target.type = (type === undefined)? "empty" : type;
+    target.title = (title === undefined)? null : title;
+    target.completed = (completed === undefined)? false : completed;
+    target.description = (description === undefined)? null : description;
+    return target;
+  }
+
+  /** 
+   * Reuse the HexInfo or new if target is wrong type.
+   * USAGE(ivan): for object pooling and other gc lowerage
+   *
+   * @param {?HexInfo} target 
+   *
+   * @param {string=} status
+   * @param {number=} id
+   * @param {string=} type
+   * @param {string=} title
+   * @param {boolean=} completed
+   * @param {string=} description
+   */
+  static recOrNew(target, status, id, type, title, completed, description) {
+    return target instanceof HexInfo
+      ? HexInfo.rec(target, status, id, type, title, completed, description)
+      : new HexInfo(status, id, type, title, completed, description);
+  }
+
+  /** 
+   * Compare two objects 
+   * USAGE(ivan): typesafe comparasion 
+   *
+   * @param {?HexInfo} first
+   * @param {?HexInfo} second 
+   *
+   * @param {string=} status
+   * @param {number=} id
+   * @param {string=} type
+   * @param {string=} title
+   * @param {boolean=} completed
+   * @param {string=} description
+   */
+  static equals(first, second) {
+    return first  instanceof HexInfo &&
+           second instanceof HexInfo &&
+           first.status === second.status &&
+           first.id === second.id &&
+           first.type === second.type &&
+           first.title === second.title &&
+           first.completed === second.completed &&
+           first.description === second.description
+  }
+
+  /** 
+   * Compares two HexInfo structs.
+   * @param {HexInfo} other 
+   */
+  equals(other) {
+    return other instanceof HexInfo &&
+           this.status === other.status &&
+           this.id === other.id &&
+           this.type === other.type &&
+           this.title === other.title &&
+           this.completed === other.completed &&
+           this.description === other.description;
+  }
+
+  /** 
+   * Clones HexInfo.
+   */
+  clone() {
+    const status = this.status;
+    const id = this.id;
+    const type = this.type;
+    const title = this.title;
+    const completed = this.completed;
+    const description = this.description
+    return new HexInfo(status, id, type, title, completed, description);
+  }
+
+  /** 
+   * Copies contents of this HexInfo to other
+   * @param {HexInfo} other
+   */
+  copyTo(other) {
+    const status = this.status;
+    const id = this.id;
+    const type = this.type;
+    const title = this.title;
+    const completed = this.completed;
+    const description = this.description
+    return HexInfo.rec(other, status, id, type, title, completed, description);
+  }
+}
+
+
+/**
  * struct Vec3(x: number, y: number, z: number)
  */
 class Vec3 {
@@ -696,141 +833,6 @@ class Chunk {
 }
 
 
-/**
- * struct HexInfo(
- *    status?: string = "loading", 
- *    id?: number = null,
- *    type?: string = "empty", 
- *    title?: string = null, 
- *    completed?: boolean = false, 
- *    description?: string = null
- * ) 
- */
-class HexInfo {
-  /**
-   * @param {string=} status
-   * @param {number=} id
-   * @param {string=} type
-   * @param {string=} title
-   * @param {boolean=} completed
-   * @param {string=} description
-   */
-  constructor(status, id, type, title, completed, description) {
-    this.status = status === undefined ? "loading" : status;
-    this.id = id === undefined ? null : id;
-    this.type = type === undefined ? "empty" : type;
-    this.title = title === undefined ? null : title;
-    this.completed = completed === undefined ? false : completed;
-    this.description = description === undefined ? null : description;
-  }
-
-  /** 
-   * Reuse the HexInfo.
-   * NOTE(ivan): unchecked, be sure it really is an object of proper type.
-   * @param {HexInfo} target 
-   * 
-   * @param {string=} status
-   * @param {number=} id
-   * @param {string=} type
-   * @param {string=} title
-   * @param {boolean=} completed
-   * @param {string=} description
-   */
-  static rec(target, status, id, type, title, completed, description) {
-    target.status = (status === undefined)? "loading" : status;
-    target.id = (id === undefined)? null : id;
-    target.type = (type === undefined)? "empty" : type;
-    target.title = (title === undefined)? null : title;
-    target.completed = (completed === undefined)? false : completed;
-    target.description = (description === undefined)? null : description;
-    return target;
-  }
-
-  /** 
-   * Reuse the HexInfo or new if target is wrong type.
-   * USAGE(ivan): for object pooling and other gc lowerage
-   *
-   * @param {?HexInfo} target 
-   *
-   * @param {string=} status
-   * @param {number=} id
-   * @param {string=} type
-   * @param {string=} title
-   * @param {boolean=} completed
-   * @param {string=} description
-   */
-  static recOrNew(target, status, id, type, title, completed, description) {
-    return target instanceof HexInfo
-      ? HexInfo.rec(target, status, id, type, title, completed, description)
-      : new HexInfo(status, id, type, title, completed, description);
-  }
-
-  /** 
-   * Compare two objects 
-   * USAGE(ivan): typesafe comparasion 
-   *
-   * @param {?HexInfo} first
-   * @param {?HexInfo} second 
-   *
-   * @param {string=} status
-   * @param {number=} id
-   * @param {string=} type
-   * @param {string=} title
-   * @param {boolean=} completed
-   * @param {string=} description
-   */
-  static equals(first, second) {
-    return first  instanceof HexInfo &&
-           second instanceof HexInfo &&
-           first.status === second.status &&
-           first.id === second.id &&
-           first.type === second.type &&
-           first.title === second.title &&
-           first.completed === second.completed &&
-           first.description === second.description
-  }
-
-  /** 
-   * Compares two HexInfo structs.
-   * @param {HexInfo} other 
-   */
-  equals(other) {
-    return other instanceof HexInfo &&
-           this.status === other.status &&
-           this.id === other.id &&
-           this.type === other.type &&
-           this.title === other.title &&
-           this.completed === other.completed &&
-           this.description === other.description;
-  }
-
-  /** 
-   * Clones HexInfo.
-   */
-  clone() {
-    const status = this.status;
-    const id = this.id;
-    const type = this.type;
-    const title = this.title;
-    const completed = this.completed;
-    const description = this.description
-    return new HexInfo(status, id, type, title, completed, description);
-  }
-
-  /** 
-   * Copies contents of this HexInfo to other
-   * @param {HexInfo} other
-   */
-  copyTo(other) {
-    const status = this.status;
-    const id = this.id;
-    const type = this.type;
-    const title = this.title;
-    const completed = this.completed;
-    const description = this.description
-    return HexInfo.rec(other, status, id, type, title, completed, description);
-  }
-}
 
 /**
  * Get mathematical remainder. a = r mod b, where b > r >= 0
