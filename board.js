@@ -9,8 +9,11 @@ import {
   oddq_to_vec2,
   HexCube, 
   HexOddQ,
-  Vec2
+  Vec2,
+  Vec3
 } from "./coords.js";
+
+import * as gmath from "./gmath.js"
 
 const board_id = window.appConfig.board.board_id;
 const user_name = window.appConfig.user_id;
@@ -177,104 +180,6 @@ class HexInfo {
 }
 
 
-/**
- * struct Vec3(x: number, y: number, z: number)
- */
-class Vec3 {
-  /**
-   * @param {number} x
-   * @param {number} y
-   * @param {number} z
-   */
-  constructor(x, y, z) {
-    this.x = x;
-    this.y = y;
-    this.z = z;
-  }
-
-  /** 
-   * Reuse the Vec3.
-   * NOTE(ivan): unchecked, be sure it really is an object of proper type.
-   * @param {Vec3} target 
-   * 
-   * @param {number} x
-   * @param {number} y
-   * @param {number} z
-   */
-  static rec(target, x, y, z) {
-    target.x = x;
-    target.y = y;
-    target.z = z;
-    return target;
-  }
-
-  /** 
-   * Reuse the Vec3 or new if target is wrong type.
-   * USAGE(ivan): for object pooling and other gc lowerage
-   *
-   * @param {?Vec3} target 
-   *
-   * @param {number} x
-   * @param {number} y
-   * @param {number} z
-   */
-  static recOrNew(target, x, y, z) {
-    return target instanceof Vec3
-      ? Vec3.rec(target, x, y, z)
-      : new Vec3(x, y, z);
-  }
-
-  /** 
-   * Compare two objects 
-   * USAGE(ivan): typesafe comparasion 
-   *
-   * @param {?Vec3} first
-   * @param {?Vec3} second 
-   *
-   * @param {number} x
-   * @param {number} y
-   * @param {number} z
-   */
-  static equals(first, second) {
-    return first  instanceof Vec3 &&
-           second instanceof Vec3 &&
-           first.x === second.x &&
-           first.y === second.y &&
-           first.z === second.z
-  }
-
-  /** 
-   * Compares two Vec3 structs.
-   * @param {Vec3} other 
-   */
-  equals(other) {
-    return other instanceof Vec3 &&
-           this.x === other.x &&
-           this.y === other.y &&
-           this.z === other.z;
-  }
-
-  /** 
-   * Clones Vec3.
-   */
-  clone() {
-    const x = this.x;
-    const y = this.y;
-    const z = this.z
-    return new Vec3(x, y, z);
-  }
-
-  /** 
-   * Copies contents of this Vec3 to other
-   * @param {Vec3} other
-   */
-  copyTo(other) {
-    const x = this.x;
-    const y = this.y;
-    const z = this.z
-    return Vec3.rec(other, x, y, z);
-  }
-}
 
 /**
  * Usage: for tracking down the visible part of the world.
@@ -808,18 +713,6 @@ class Chunk {
   }
 }
 
-
-
-/**
- * Get mathematical remainder. a = r mod b, where b > r >= 0
- * @param {number} a - the number to divide
- * @param {number} m - the modulo
- * @returns {number} - remainder of division
- */
-function rem(a, m) {
-  return ((a % m) + m) % m;
-}
-
 /**
  * The system responsible for handling all kind of fetches from the server.
  * When it comes to hexes.
@@ -1047,8 +940,8 @@ class ChunkStorage {
   }
 
   static hexID(col, row) {
-    const in_hex_col = rem(col, Chunk.SIZE);
-    const in_hex_row = rem(row, Chunk.SIZE);
+    const in_hex_col = gmath.rem(col, Chunk.SIZE);
+    const in_hex_row = gmath.rem(row, Chunk.SIZE);
     const hex_id = in_hex_row * Chunk.SIZE + in_hex_col;
     return hex_id;
   }
@@ -1320,7 +1213,6 @@ class BoundingBox {
     return BoundingBox.recOrNew(target, minX, maxX, minY, maxY);
   }
 }
-
 
 /**
  * Cull the visible hexes on the screen.
@@ -1641,9 +1533,9 @@ function draw_grid() {
 
 
   function lerp_color(start, end, t) {
-    const r = Math.round(lerp(start.r, end.r, t));
-    const g = Math.round(lerp(start.g, end.g, t));
-    const b = Math.round(lerp(start.b, end.b, t));
+    const r = Math.round(gmath.lerp(start.r, end.r, t));
+    const g = Math.round(gmath.lerp(start.g, end.g, t));
+    const b = Math.round(gmath.lerp(start.b, end.b, t));
     return {r, g, b};
   }
 
@@ -2046,10 +1938,10 @@ function process_pending_UI_events() {
 
         const transition = {
           get x() {
-            return lerp(this.fromX, this.toX, this.t) - this.toX;
+            return gmath.lerp(this.fromX, this.toX, this.t) - this.toX;
           },
           get y() {
-            return lerp(this.fromY, this.toY, this.t) - this.toY;
+            return gmath.lerp(this.fromY, this.toY, this.t) - this.toY;
           },
           z: 0,
           get t() {

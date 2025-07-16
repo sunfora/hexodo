@@ -418,3 +418,103 @@ export function xy_nearest_oddq(x, y, dest=null) {
 
   return HexOddQ.recOrNew(dest, col, row);
 }
+
+
+/**
+ * struct Vec3(x: number, y: number, z: number)
+ */
+export class Vec3 {
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   */
+  constructor(x, y, z) {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+  }
+
+  /** 
+   * Reuse the Vec3.
+   * NOTE(ivan): unchecked, be sure it really is an object of proper type.
+   * @param {Vec3} target 
+   * 
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   */
+  static rec(target, x, y, z) {
+    target.x = x;
+    target.y = y;
+    target.z = z;
+    return target;
+  }
+
+  /** 
+   * Reuse the Vec3 or new if target is wrong type.
+   * USAGE(ivan): for object pooling and other gc lowerage
+   *
+   * @param {?Vec3} target 
+   *
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   */
+  static recOrNew(target, x, y, z) {
+    return target instanceof Vec3
+      ? Vec3.rec(target, x, y, z)
+      : new Vec3(x, y, z);
+  }
+
+  /** 
+   * Compare two objects 
+   * USAGE(ivan): typesafe comparasion 
+   *
+   * @param {?Vec3} first
+   * @param {?Vec3} second 
+   *
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   */
+  static equals(first, second) {
+    return first  instanceof Vec3 &&
+           second instanceof Vec3 &&
+           first.x === second.x &&
+           first.y === second.y &&
+           first.z === second.z
+  }
+
+  /** 
+   * Compares two Vec3 structs.
+   * @param {Vec3} other 
+   */
+  equals(other) {
+    return other instanceof Vec3 &&
+           this.x === other.x &&
+           this.y === other.y &&
+           this.z === other.z;
+  }
+
+  /** 
+   * Clones Vec3.
+   */
+  clone() {
+    const x = this.x;
+    const y = this.y;
+    const z = this.z
+    return new Vec3(x, y, z);
+  }
+
+  /** 
+   * Copies contents of this Vec3 to other
+   * @param {Vec3} other
+   */
+  copyTo(other) {
+    const x = this.x;
+    const y = this.y;
+    const z = this.z
+    return Vec3.rec(other, x, y, z);
+  }
+}
