@@ -35,7 +35,6 @@ const remove_button = document.getElementById('remove-button');
 
 const canvas = document.getElementById('hex-grid');
 const cam_debug = document.getElementById('cam-debug');
-const ctx = canvas.getContext('2d');
 
 const title = document.querySelector('#task-title');
 const description = document.querySelector('#task-description');
@@ -192,6 +191,10 @@ class Camera {
    * Is camera moved by user?
    */
   isDragged = false;
+
+  isFreezed = false;
+  swapPosition  = new Vec3(0, 0, 0);
+  swapTransform = new Vec3(0, 0, 0);
 
   /**
    * Coordinate transform object.
@@ -380,6 +383,87 @@ class Camera {
     const minY = this.y - height / 2;
     const maxY = this.y + height / 2;
     return BoundingBox.recOrNew(dest, minX, maxX, minY, maxY);
+  }
+  
+  withFreeze(callback) {
+    this.freeze();
+    try {
+      callback();
+    } finally {
+      this.unfreeze();
+    }
+  }
+
+  /**
+   * Freeze camera. 
+   * USAGE(ivan): for atomic draws.
+   */
+  freeze() {
+    if (!this.isFreezed) {
+      this.isFreezed = true;
+      Vec3.rec(this.swapTransform, this.transform.x, this.transform.y, this.transform.z);
+      this.swapTransform.x = this.transform.x;
+      this.swapTransform.y = this.transform.y;
+      this.swapTransform.z = this.transform.z
+      this.swapPosition.x = this.position.x;
+      this.swapPosition.y = this.position.y;
+      this.swapPosition.z = this.position.z
+      this.swap();
+    } else {
+      console.error("attempt to freeze camera while freezed");
+    }
+  }
+
+  /** 
+   * Swaps transform <-> swapTransform
+   *       position  <-> swapPosition
+   * NOTE(ivan):  implementation detail of freeze/unfreeze
+   * USAGE(ivan): if careful, maybe you can use it for something else
+   *              remember to make swapTransform and swapPosition Vec3 back
+   */
+  swap() {
+    const position = this.position;
+    this.position = this.swapPosition;
+    this.swapPosition = position;
+
+    const transform = this.transform;
+    this.transform = this.swapTransform;
+    this.swapTransform = transform;
+  }
+
+  /**
+   * Unfreezes freezed camera (it is a checked swap)
+   */
+  unfreeze() {
+    if (this.isFreezed) {
+      this.isFreezed = false;
+      this.swap(); 
+    } else {
+      console.error("attempt to unfreeze while freezed");
+    }
+  }
+}
+
+/**
+ * NOTE(ivan): 
+ * > I had a game object
+ *   but it seems like I would benefit from more structured 
+ *   gamestate like class where everything is kinda in the same place
+ * > What I primarely want here is... I want to track which tools are used.
+ *   What actions I do now. And so and so forth.
+ */
+class GameState {
+  constuctor() {
+    this.selected = {
+      hex: new HexOddQ(0, 0),
+      info: new HexInfo(),
+      time: Date.now()
+    }
+    this.underCursor = {
+      hex: new HexOddQ(0, 0),
+      info: new HexInfo(),
+      time: Date.now()
+    }
   }
 }
 
@@ -1242,6 +1326,116 @@ function cull_hexes(camera, target=null) {
 }
 
 /**
+ * Canvas which respects HiDPI, setting the default scale.
+ */
+class ScreenDPR {
+  /**
+   * the buffer to draw to
+   * @type {HTMLCanvasElement} 
+   */
+  device;
+
+  /**
+   * swap buffer
+   * @type {HTMLCanvasElement} 
+   */
+  swap;
+
+  /**
+   * The scaled context.
+   * @type {CanvasRenderingContext2D} ctx
+   */
+  ctx;
+
+  /**
+   * The swap context.
+   * @type {CanvasRenderingContext2D} ctx
+   */
+  swapctx;
+
+
+  constructor(dpr=window.devicePixelRatio, canvas=document.createElement('canvas')) {
+    this.device = canvas;
+    this.swap = document.createElement('canvas');
+    this.swapctx = this.swap.getContext('2d');
+
+    this.#dpr = dpr;
+    this.ctx = this.device.getContext('2d');
+    this.ctx.scale(this.#dpr, this.#dpr);
+  }
+
+  #dpr;
+  /**
+   * Device Pixel Ratio
+   * @type {number}
+   */
+  get dpr() {
+    return this.#dpr;
+  }
+  set dpr(value) {
+    this.#dpr = value;
+    this.ctx.setTransform(this.#dpr, 0, 0, this.#dpr, 0, 0);
+  }
+  
+  preserveImage(callback) {
+    const old_width = this.width;
+    const old_height = this.height;
+    const w = this.device.width;
+    const h = this.device.height
+    if (w === 0 || h === 0) {
+      callback();
+      return;
+    }
+
+    this.swap.width  = w;
+    this.swap.height = h;
+    this.swapctx.drawImage(this.device, 
+      0, 0, w, h,
+      0, 0, w, h
+    );
+    callback();
+    this.ctx.drawImage(this.swap,
+      0, 0, w, h,
+      0, 0, old_width, old_height
+    );
+  }
+
+  get deviceWidth() {
+    return this.device.width;
+  }
+  set deviceWidth(value) {
+    this.device.width = value;
+    this.ctx.scale(this.#dpr, this.#dpr);
+  }
+
+  get deviceHeight() {
+    return this.device.height;
+  }
+  set deviceHeight(value) {
+    this.device.height = value;
+    this.ctx.scale(this.#dpr, this.#dpr);
+  }
+
+  get width() {
+    return this.device.width / this.dpr;
+  }
+  set width(value) {
+    this.deviceWidth = value * this.dpr;
+  }
+
+  get height() {
+    return this.device.height / this.dpr;
+  }
+  set height(value) {
+    this.deviceHeight = value * this.dpr;
+  }
+
+  clear() {
+    this.ctx.clearRect(0, 0, this.width, this.height);
+  }
+}
+
+/**
  * here goes everything that is render specific
  * for example default render scale
  */
@@ -1250,21 +1444,88 @@ class Render {
    * Scale of objects on screen.
    * USAGE(ivan): basically you transform logical coordianates to pixels this way.
    */
-  static SCALE = 30;
-  static DPR = window.devicePixelRatio;
-
-  static camera = camera;
+  scale = 30;
+  
+  /**
+   * The screen/buffer to draw to.
+   * @type {ScreenDPR}
+   */
+  screen;
 
   /**
-   * The canvas to draw to.
-   * @type {HTMLCanvasElement}
+   * Camera for render to cull the visible area.
+   * @type {Camera}
    */
-  static screen = document.getElementById('hex-grid');
+  camera;
+  
   /**
-   * The current active canvas contex.
-   * @type {CanvasRenderingContext2D} ctx
+   * @param {Camera} camera            - camera for render to cull the visible area
+   * @param {ScreenDPR} screen - the output buffer where the drawing will happen
+   * @param {Object} [options]
+   * @param {number} [options.dpr=window.devicePixelRatio]   - device pixel ratio for screen to set
+   * @param {number} [options.scale=30] - unit scale for the coordinates
    */
-  static screen_ctx = Render.screen.getContext('2d');
+  constructor(camera, screen, {scale = 30}={}) {
+    this.camera = camera;
+    this.screen = screen;
+    this.scale = scale;
+    this.outlineScreen = new ScreenDPR(this.screen.dpr);
+  }
+ 
+  /**
+   * Take the camera and make it aligned to screen width / screen height
+   * respecting dpr and scale
+   */
+  cameraToScreen() {
+    this.camera.width  = this.screen.width / this.scale; 
+    this.camera.height = this.screen.height / this.scale;
+  }
+  
+  drawCameraDebugRectangle() {
+    const bb = this.camera.visiblePlane(0);
+    const size = this.unitPixelScale(0);
+
+    const debug_width =  (bb.maxX - bb.minX) * size;
+    const debug_height = (bb.maxY - bb.minY) * size;
+    const debug_x = this.xCenterScreen - (debug_width  / 2);
+    const debug_y = this.yCenterScreen - (debug_height / 2);
+
+    {
+      this.screen.ctx.save();
+      this.screen.ctx.strokeStyle = "red";
+      this.screen.ctx.fillStyle = "red";
+      this.screen.ctx.fillRect(this.xCenterScreen - 1, this.yCenterScreen - 10, 2, 20);
+      this.screen.ctx.fillRect(this.xCenterScreen - 10, this.yCenterScreen - 1, 20, 2);
+      this.screen.ctx.lineWidth = 2;
+      this.screen.ctx.strokeRect(
+        debug_x, debug_y, 
+        debug_width, debug_height
+      );
+      this.screen.ctx.restore();
+    }
+  }
+
+  old_dpr;
+  old_width;
+  old_height;
+  /**
+   * Update screen dimension with respect to the visible dimension for the user.
+   */
+  updateScreenDimensions() {
+    if (this.old_dpr === window.devicePixelRatio && 
+        this.old_width === this.screen.device.clientWidth &&
+        this.old_height === this.screen.device.clientHeight) {
+      return;
+    }
+    this.old_dpr = window.devicePixelRatio;
+    this.old_width = this.screen.device.clientWidth;
+    this.old_height = this.screen.device.clientHeight;
+
+    this.screen.dpr = this.old_dpr;
+    this.screen.width  = this.old_width;
+    this.screen.height = this.old_height;
+  
+  }
 
   /**
    * Translate clientX, clientY to logical coordinates on plane with height z
@@ -1273,45 +1534,50 @@ class Render {
    * @param {number=} plane_z  - logical z depth
    * @param {?Vec2}   target   - reuse vec2
    */
-  static xy_client_to_plane(client_x, client_y, plane_z=0, target=null) {
-    const camera = Render.camera;
-    const pixel_scale = camera.getUnitScale(plane_z) * Render.SCALE;
-    let {x: canvas_x, y: canvas_y} = Render.screen.getBoundingClientRect();
-
-    let global_x = camera.x - ((canvas_x - client_x) * Render.DPR + Render.screen.width  / 2) / pixel_scale;
-    let global_y = camera.y - ((canvas_y - client_y) * Render.DPR + Render.screen.height / 2) / pixel_scale;
-    return Vec2.recOrNew(target, global_x, global_y);
+  xy_clientToLogical(client_x, client_y, plane_z=0, target=null) {
+    const camera = this.camera;
+    const pixel_scale = this.unitPixelScale(plane_z);
+    const screen_box = this.screen.device.getBoundingClientRect();
+    let logical_x = camera.x + (client_x - screen_box.x - this.xCenterScreen) / pixel_scale;
+    let logical_y = camera.y + (client_y - screen_box.y - this.yCenterScreen) / pixel_scale;
+    return Vec2.recOrNew(target, logical_x, logical_y);
   }
 
   /**
    * @param {number} x - x logical coord
    * @param {number} y - y logical coord
-   * @param {number} z - z logical coord
+   * @param {number} plane_z - z logical coord / depth
    * @param {?Vec2}  target - reuse object
    *
    * @returns {Vec2} coordinates on screen
    */
-  static xyz_to_screen(x, y, z, target=null) {
-    return Render.xyz_to_buffer(x, y, z, Render.screen, target);
+  xy_logicalToScreen(x, y, plane_z, target=null) {
+    const camera = this.camera;
+    const pixel_scale = this.unitPixelScale(plane_z);
+    const screen_x = (x - camera.x) * pixel_scale + this.xCenterScreen;
+    const screen_y = (y - camera.y) * pixel_scale + this.yCenterScreen;
+    return Vec2.recOrNew(target, screen_x, screen_y);
+  }
+
+  get xCenterScreen() {
+    return this.screen.width / 2;
+  }
+  get yCenterScreen() {
+    return this.screen.height / 2;
+  }
+  
+  /**
+   * How big is the scale of unit with respect to scale (screen logical pixels [without dpr])?
+   */ 
+  unitPixelScale(z) {
+    return this.camera.getUnitScale(z) * this.scale; 
   }
 
   /**
-   * @param {number} x - x logical coord
-   * @param {number} y - y logical coord
-   * @param {number} z - z logical coord
-   * @param {HTMLCanvasElement} buffer - texture buffer
-   * @param {?Vec2}  target - reuse object
-   *
-   * @returns {Vec2} coordinates on buffer
-   */
-  static xyz_to_buffer(x, y, z, buffer, target=null) {
-    const camera = Render.camera;
-    const pixel_scale = camera.getUnitScale(z) * Render.SCALE;
-
-    const buffer_x = (x - camera.x) * pixel_scale + buffer.width  / 2;
-    const buffer_y = (y - camera.y) * pixel_scale + buffer.height / 2;
-
-    return Vec2.recOrNew(target, buffer_x, buffer_y);
+   * How big is the scale of unit with respect to scale and dpr (scren actual pixels)?
+   */ 
+  unitDevicePixelScale(z) {
+    return this.unitPixelScale(z) * this.screen.dpr;
   }
 
   static path_hexagon(ctx, size) {
@@ -1335,27 +1601,35 @@ class Render {
     ctx.closePath();
     ctx.translate(size * Math.cos(angle), size * Math.sin(angle));
   }
+ 
+  prerendered_chunk = new Map();
+  /**
+   * 
+   */
+  render_chunk_text(col, row) {
+    const key = `${col},${row}`; 
+    if (prerendered_chunk.get(key)) {
+      
+    }
+  }
 
   /**
-   * @type {HTMLCanvasElement} outlineBuffer;
+   * @type {ScreenDPR} outlineBuffer;
    */
-  static outline_buffer = document.createElement('canvas');
-  /**
-   * @type {CanvasRenderingContext2D} outline_ctx
-   */
-  static outline_ctx = Render.outline_buffer.getContext('2d');
-  static outline_unit = null;
+  outlineScreen;
+  last_unit = null;
+
   /**
    * fast logarithmic outline drawing
    */
-  static draw_outline(z) {
-    const buffer = Render.outline_buffer;
-    const ctx    = Render.outline_ctx;
+  drawOutline(z) {
+    const buffer = this.outlineScreen;
+    const ctx    = this.outlineScreen.ctx;
 
 
-    const camera = Render.camera;
+    const camera = this.camera;
     
-    const prev = Render.outline_unit;
+    const prev = this.last_unit;
     const unit = camera.getUnitScale(z);
     const line_width = 0.75 * unit;
 
@@ -1365,7 +1639,7 @@ class Render {
 
     // now we need to calculate the size of the individual tile
     // so that we would seamlessly repeat them
-    const hexagon_size        = unit * Render.SCALE;
+    const hexagon_size        = unit * this.scale;
     const hexagon_height      = hexagon_size * Math.sqrt(3)
     const hexagon_width       = hexagon_size * 2;
 
@@ -1375,40 +1649,45 @@ class Render {
     const tile_center_x =  tile_width / 2;
     const tile_center_y = tile_height / 2;
     
+    const render_width  = this.screen.width  + (hexagon_width  * 4);
+    const render_height = this.screen.height + (hexagon_height * 4);
+
     // set up the buffer to the proper height/width
     // if scaling has not changed more than twice a size
     // then reuse
-    if (prev && prev / unit < 1.5 && unit / prev < 1.5) {
-      const hex = new HexOddQ(bb.minX, bb.minY);
-      const vec = oddq_to_vec2(hex);
-      const hex_center_screen = Render.xyz_to_screen(vec.x, vec.y, z, buffer)
-      Render.screen_ctx.drawImage(buffer,
-        0, 0, 
-        (Render.screen.width  + hexagon_width  * 4) * (prev/unit), 
-        (Render.screen.height + hexagon_height * 4) * (prev/unit), 
-        hex_center_screen.x - tile_center_x,
-        hex_center_screen.y - tile_center_y,
-        Render.screen.width  + hexagon_width  * 4, 
-        Render.screen.height + hexagon_height * 4, 
-      )
-      return;
-    }
-    Render.outline_unit = unit;
-    buffer.width  = Math.round(Render.screen.width  * 2 + hexagon_width  * 4);
-    buffer.height = Math.round(Render.screen.height * 2 + hexagon_height * 4);
-    ctx.clearRect(0, 0, buffer.width, buffer.height);
+    //if(
+    //  prev && (prev / unit < 1.5) && (unit / prev) < 1.5 &&
+    //  render_width * (prev/unit) < buffer.width &&
+    //  render_height * (prev/unit) < buffer.height
+    //) {
+    //  const hex = new HexOddQ(bb.minX, bb.minY);
+    //  const vec = oddq_to_vec2(hex);
+    //  const hex_center_screen = this.xy_logicalToScreen(vec.x, vec.y, z)
+    //  this.screen.ctx.drawImage(buffer.device,
+    //    0, 0, 
+    //    buffer.dpr * (render_width) * (prev/unit), 
+    //    buffer.dpr * (render_height) * (prev/unit), 
+    //    hex_center_screen.x - tile_center_x,
+    //    hex_center_screen.y - tile_center_y,
+    //    (render_width), 
+    //    (render_height), 
+    //  )
+    //  return;
+    //}
+    this.last_unit = unit;
+    buffer.device.width  = render_width * render.screen.dpr;
+    buffer.device.height = render_height * render.screen.dpr;
+    buffer.dpr = render.screen.dpr;
     
     ctx.strokeStyle = 'black';
     ctx.lineWidth = line_width;
     ctx.imageSmoothingEnabled = false;
     // draw one tile
     function draw_one_tile(x, y) {
-      ctx.save()
       // set up the ctx
       // draw hexagon
       ctx.translate(x + tile_center_x, y + tile_center_y);
       // draw `arms`
-      ctx.beginPath()
 
       ctx.moveTo(-3 * hexagon_size / 2,                   0);
       ctx.lineTo(-2 * hexagon_size / 2,                   0);
@@ -1431,37 +1710,47 @@ class Render {
       ctx.moveTo( 2 * hexagon_size / 2,                   0);
       ctx.lineTo( 1 * hexagon_size / 2, -hexagon_height / 2);
 
-      ctx.stroke();
-      ctx.restore();
+
+      ctx.translate(-x - tile_center_x, -y - tile_center_y);
+
     }
-    
-    for (let w = 0; w < 16; w += 1) {
-      for (let h = 0; h < 16; h += 1) {
-        draw_one_tile(w * tile_width, h * tile_height);
-      }
-    }
+
+    ctx.beginPath()
+    draw_one_tile(0, 0);
+    ctx.stroke();
+    const tr = ctx.getTransform();
+    ctx.setTransform(1, 0, 0, 1, 0, 0); 
     {
-      let current_width  = 16 * tile_width;
-      let current_height = 16 * tile_height;
+      let current_width  = tile_width;
+      let current_height = tile_height;
       while (current_width < buffer.width || current_height < buffer.height) {
         // do 3 drawing calls
-        ctx.drawImage(buffer, 
+        ctx.drawImage(buffer.device, 
           0, 0, 
-          current_width, current_height,
-          current_width, 0, 
-          current_width, current_height
+          buffer.dpr * (current_width + line_width), 
+          buffer.dpr * (current_height + line_width),
+          buffer.dpr * current_width, 
+          buffer.dpr * 0, 
+          buffer.dpr * (current_width + line_width), 
+          buffer.dpr * (current_height + line_width),
         );
-        ctx.drawImage(buffer, 
+        ctx.drawImage(buffer.device, 
           0, 0, 
-          current_width, current_height,
-                      0, current_height, 
-          current_width, current_height
+          buffer.dpr * (current_width + line_width), 
+          buffer.dpr * (current_height + line_width),
+          buffer.dpr * 0, 
+          buffer.dpr * current_height, 
+          buffer.dpr * (current_width + line_width), 
+          buffer.dpr * (current_height + line_width),
         );
-        ctx.drawImage(buffer, 
+        ctx.drawImage(buffer.device, 
           0, 0, 
-          current_width, current_height,
-          current_width, current_height, 
-          current_width, current_height
+          buffer.dpr * (current_width + line_width), 
+          buffer.dpr * (current_height + line_width),
+          buffer.dpr * current_width, 
+          buffer.dpr * current_height, 
+          buffer.dpr * (current_width + line_width), 
+          buffer.dpr * (current_height + line_width),
         );
 
         current_width  *= 2;
@@ -1472,24 +1761,31 @@ class Render {
     // finally output it to the screen
     const hex = new HexOddQ(bb.minX, bb.minY);
     const vec = oddq_to_vec2(hex);
-    const hex_center_screen = Render.xyz_to_screen(vec.x, vec.y, z, buffer)
-    Render.screen_ctx.drawImage(buffer,
-      0, 0, buffer.width, buffer.height,
-      hex_center_screen.x - tile_center_x,
-      hex_center_screen.y - tile_center_y,
-      buffer.width, buffer.height
+    const hex_center_screen = this.xy_logicalToScreen(vec.x, vec.y, z)
+    const tr2 = this.screen.ctx.getTransform();
+    this.screen.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.screen.ctx.drawImage(buffer.device,
+      0, 0, 
+      buffer.dpr * render_width ,
+      buffer.dpr * render_height,
+      buffer.dpr * (hex_center_screen.x - tile_center_x),
+      buffer.dpr * (hex_center_screen.y - tile_center_y),
+      buffer.dpr * render_width, 
+      buffer.dpr * render_height
     )
+    ctx.setTransform(tr)
+    this.screen.ctx.setTransform(tr2)
   }
 
   /**
    * draw hexagon with specified color and text using cartesian coordinates
    */
-  static draw_hexagon_xyz(x, y, z=0, operation) {
-    const {x: screen_x, y: screen_y} = Render.xyz_to_screen(x, y, z);
+  xy_drawHexagon(x, y, z=0, operation=this.id) {
+    const {x: screen_x, y: screen_y} = this.xy_logicalToScreen(x, y, z);
 
-    const ctx  = Render.screen_ctx;
-    const unit = Render.camera.getUnitScale(z); 
-    const size = Render.SCALE * Render.camera.getUnitScale(z);
+    const ctx  = this.screen.ctx;
+    const unit = this.camera.getUnitScale(z); 
+    const size = this.unitPixelScale(z);
 
     ctx.save()
     {
@@ -1500,17 +1796,17 @@ class Render {
     }
     ctx.restore();
   }
-
+  
   /**
    * draw hexagon with specified color and text using oddq coordinates
    */
-  static draw_hexagon_oddq(hex, z, operation, buffer=Render.screen) {
+  oddq_drawHexagon(hex, z=0, operation) {
     const {x: x, y: y} = oddq_to_vec2(hex);
-    Render.draw_hexagon_xyz(x, y, z, operation, buffer);
+    this.xy_drawHexagon(x, y, z, operation);
   }
 }
 
-Render.screen_ctx.scale(Render.DPR, Render.DPR);
+const render = new Render(camera, new ScreenDPR(window.devicePixelRatio, canvas));
 
 const EMPTY    = { r: 255, g: 255, b: 255 }; // white
 const SELECTED = { r: 255, g: 215, b: 0   }; // gold
@@ -1519,14 +1815,8 @@ const TODO     = { r: 255, g: 165, b: 0   }; // orange
 const LOCKED   = { r: 175, g: 157, b: 154 }; // #AF9D9A
 const LOADING  = { r: 128, g: 128, b: 128 }; // grey
 
-
-// Function to linearly interpolate between two values
-function lerp(start, end, t) {
-  return start + t * (end - start);
-}
-
 function draw_grid() {
-  let bounding_box = cull_hexes(camera, canvas);
+  let bounding_box = cull_hexes(render.camera);
   
 
   const HIGHLIGHT_DURATION = 200;
@@ -1575,7 +1865,7 @@ function draw_grid() {
       }
 
       if (calculated_color !== EMPTY) {
-        Render.draw_hexagon_oddq(hex, 0, (ctx) => {
+        render.oddq_drawHexagon(hex, 0, (ctx) => {
           ctx.fillStyle = color_to_style(calculated_color);
           ctx.fill();
         });
@@ -1586,16 +1876,16 @@ function draw_grid() {
   if (camera.z <= 2) {
     // draw text
     //
-    const size = camera.z0UnitScale * Render.SCALE;
-    ctx.font = `${size/3}px Arial`; // Adjust font size as needed to fit the circle
-    ctx.fillStyle = 'black';
-    ctx.textAlign = 'center'; // Center the text horizontally
-    ctx.textBaseline = 'middle'; // Center the text vertically
+    const size = render.unitPixelScale(0);
+    render.screen.ctx.font = `${size/3}px Arial`; // Adjust font size as needed to fit the circle
+    render.screen.ctx.fillStyle = 'black';
+    render.screen.ctx.textAlign = 'center'; // Center the text horizontally
+    render.screen.ctx.textBaseline = 'middle'; // Center the text vertically
     for (let row = bounding_box.minY; row <= bounding_box.maxY; row++) {
       for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
         // reuse hex
         HexOddQ.rec(hex, col, row);
-        Render.draw_hexagon_oddq(hex, 0, (ctx, unit, size) => {
+        render.oddq_drawHexagon(hex, 0, (ctx, unit, size) => {
           const text = `${hex.col} ${hex.row}`;
           // now add text there 
           ctx.fillText(text, 0, 0);
@@ -1604,7 +1894,20 @@ function draw_grid() {
     }
   }
 
-  Render.draw_outline(0);
+  if (camera.z >= 1.5) {
+    render.drawOutline(0);
+  } else {
+    render.screen.ctx.lineWidth = render.camera.getUnitScale(0) * 0.25;
+    for (let row = bounding_box.minY; row <= bounding_box.maxY; row++) {
+      for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
+        // reuse hex
+        HexOddQ.rec(hex, col, row);
+        render.oddq_drawHexagon(hex, 0, (ctx, unit, size) => {
+          ctx.stroke();
+        })
+      }
+    }
+  }
   update_lists(new_active, new_done, new_locked);
 }
 
@@ -1689,15 +1992,12 @@ function calculate_color(hex, reuse=null) {
 }
 
 function draw_animation_frame() {
-  canvas.width  = canvas.clientWidth  * Render.DPR;
-  canvas.height = canvas.clientHeight * Render.DPR;
 
   // update camera fovX, fovY automatically
-  camera.width  =  canvas.width  / Render.SCALE;
-  camera.height =  canvas.height / Render.SCALE;
-  
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  draw_grid();
+  render.updateScreenDimensions();
+  render.screen.clear();
+  render.cameraToScreen();
+  camera.withFreeze(draw_grid);
 }
 
 let canvasFrame = null;
@@ -1852,7 +2152,7 @@ function process_pending_UI_events() {
         break;
       }
       case 'REQUEST_DRAG_START': {
-        const size = Render.SCALE * camera.z0UnitScale;
+        const size = render.unitPixelScale(0);
         const drag_transform = {
           get x() {
             return (this.savedPageX - this.pageX) / size;
@@ -1890,8 +2190,8 @@ function process_pending_UI_events() {
           camera.transform.pageY = event.pageY;
           register_event('CAMERA_DRAGGED', {});
         }
-        let {x: global_x, y: global_y} = Render.xy_client_to_plane(event.clientX, event.clientY, 0);
-        let hex = xy_nearest_oddq(global_x, global_y)
+        let {x: logical_x, y: logical_y} = render.xy_clientToLogical(event.clientX, event.clientY, 0);
+        let hex = xy_nearest_oddq(logical_x, logical_y)
         if (!(hex.equals(under_cursor.hex))) {
           hex.copyTo(under_cursor.hex);
           under_cursor.time = Date.now()
@@ -2061,14 +2361,7 @@ function loop() {
 
   {
     cam_debug.textContent = `cam(${camera.x.toFixed(5)}, ${camera.y.toFixed(5)}, ${camera.z.toFixed(5)})`;
-    const bb = camera.visiblePlane(0);
-    const size = camera.z0UnitScale * Render.SCALE;
-    const width =  (bb.maxX - bb.minX) * size;
-    const height = (bb.maxY - bb.minY) * size;
-
-    ctx.strokeStyle = "red";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(canvas.width/2 - width/2, canvas.height/2 - height/2, width, height);
+    // render.drawCameraDebugRectangle()
   }
 
   canvasFrame = requestAnimationFrame(loop);
