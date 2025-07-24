@@ -1296,6 +1296,19 @@ class BoundingBox {
 
     return BoundingBox.recOrNew(target, minX, maxX, minY, maxY);
   }
+
+  get centerX() {
+    return (this.minX + this.maxX) / 2;
+  }
+  get centerY() {
+    return (this.minY + this.maxY) / 2;
+  }
+  get width() {
+    return this.maxX - this.minX;
+  }
+  get height() {
+    return this.maxY - this.minY;
+  }
 }
 
 /**
@@ -1505,27 +1518,24 @@ class Render {
     }
   }
 
-  old_dpr;
-  old_width;
-  old_height;
   /**
    * Update screen dimension with respect to the visible dimension for the user.
+   * @method
    */
-  updateScreenDimensions() {
-    if (this.old_dpr === window.devicePixelRatio && 
-        this.old_width === this.screen.device.clientWidth &&
-        this.old_height === this.screen.device.clientHeight) {
+  updateScreenDimensions = ((dpr, width, height) => function () {
+    if (dpr    === window.devicePixelRatio && 
+        width  === this.screen.device.clientWidth &&
+        height === this.screen.device.clientHeight) {
       return;
     }
-    this.old_dpr = window.devicePixelRatio;
-    this.old_width = this.screen.device.clientWidth;
-    this.old_height = this.screen.device.clientHeight;
+    dpr    = window.devicePixelRatio;
+    width  = this.screen.device.clientWidth;
+    height = this.screen.device.clientHeight;
 
-    this.screen.dpr = this.old_dpr;
-    this.screen.width  = this.old_width;
-    this.screen.height = this.old_height;
-  
-  }
+    this.screen.dpr    = dpr;
+    this.screen.width  = width;
+    this.screen.height = height;
+  })();
 
   /**
    * Translate clientX, clientY to logical coordinates on plane with height z
@@ -1601,15 +1611,27 @@ class Render {
     ctx.closePath();
     ctx.translate(size * Math.cos(angle), size * Math.sin(angle));
   }
- 
-  prerendered_chunk = new Map();
+
+
+  drawChunk
+
+  prerenderedChunks = new Map();
+
   /**
    * 
    */
-  render_chunk_text(col, row) {
-    const key = `${col},${row}`; 
-    if (prerendered_chunk.get(key)) {
-      
+  drawChunkText(col, row, z) {
+    const key = `${col},${row}`;
+    
+    let vec = null;
+    for (let row = bounding_box.minY; row <= bounding_box.maxY; row++) {
+      for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
+        const text = `${hex.col} ${hex.row}`;
+        HexOddQ.rec(hex, col, row);
+        vec = oddq_to_vec2(hex, vec);
+        vec = render.xy_logicalToScreen(vec.x, vec.y, 0, vec);
+        render.screen.ctx.fillText(text, vec.x, vec.y);
+      }
     }
   }
 
@@ -1617,78 +1639,13 @@ class Render {
    * @type {ScreenDPR} outlineBuffer;
    */
   outlineScreen;
-  last_unit = null;
-
-  /**
-   * fast logarithmic outline drawing
-   */
-  drawOutline(z) {
-    const buffer = this.outlineScreen;
-    const ctx    = this.outlineScreen.ctx;
-
-
-    const camera = this.camera;
-    
-    const prev = this.last_unit;
-    const unit = camera.getUnitScale(z);
-    const line_width = 0.75 * unit;
-
-
-    // find how many iterations I need 
-    const bb       = cull_hexes(camera);
-
-    // now we need to calculate the size of the individual tile
-    // so that we would seamlessly repeat them
-    const hexagon_size        = unit * this.scale;
-    const hexagon_height      = hexagon_size * Math.sqrt(3)
-    const hexagon_width       = hexagon_size * 2;
-
-    const tile_width  = 3 * hexagon_size;
-    const tile_height = hexagon_height;
-
-    const tile_center_x =  tile_width / 2;
-    const tile_center_y = tile_height / 2;
-    
-    const render_width  = this.screen.width  + (hexagon_width  * 4);
-    const render_height = this.screen.height + (hexagon_height * 4);
-
-    // set up the buffer to the proper height/width
-    // if scaling has not changed more than twice a size
-    // then reuse
-    //if(
-    //  prev && (prev / unit < 1.5) && (unit / prev) < 1.5 &&
-    //  render_width * (prev/unit) < buffer.width &&
-    //  render_height * (prev/unit) < buffer.height
-    //) {
-    //  const hex = new HexOddQ(bb.minX, bb.minY);
-    //  const vec = oddq_to_vec2(hex);
-    //  const hex_center_screen = this.xy_logicalToScreen(vec.x, vec.y, z)
-    //  this.screen.ctx.drawImage(buffer.device,
-    //    0, 0, 
-    //    buffer.dpr * (render_width) * (prev/unit), 
-    //    buffer.dpr * (render_height) * (prev/unit), 
-    //    hex_center_screen.x - tile_center_x,
-    //    hex_center_screen.y - tile_center_y,
-    //    (render_width), 
-    //    (render_height), 
-    //  )
-    //  return;
-    //}
-    this.last_unit = unit;
-    buffer.device.width  = render_width * render.screen.dpr;
-    buffer.device.height = render_height * render.screen.dpr;
-    buffer.dpr = render.screen.dpr;
-    
-    ctx.strokeStyle = 'black';
-    ctx.lineWidth = line_width;
-    ctx.imageSmoothingEnabled = false;
-    // draw one tile
-    function draw_one_tile(x, y) {
-      // set up the ctx
-      // draw hexagon
-      ctx.translate(x + tile_center_x, y + tile_center_y);
-      // draw `arms`
-
+  
+  pathTile(x, y, width, height, screen) {
+    const ctx = screen.ctx;
+    const hexagon_size   = width / 3;
+    const hexagon_height = height;
+    ctx.translate(x + width / 2, y + height / 2);
+    {
       ctx.moveTo(-3 * hexagon_size / 2,                   0);
       ctx.lineTo(-2 * hexagon_size / 2,                   0);
 
@@ -1709,73 +1666,176 @@ class Render {
 
       ctx.moveTo( 2 * hexagon_size / 2,                   0);
       ctx.lineTo( 1 * hexagon_size / 2, -hexagon_height / 2);
-
-
-      ctx.translate(-x - tile_center_x, -y - tile_center_y);
-
     }
+    ctx.translate(-x - width/2, -y - height/2);
+  }
+
+  fillOutlineScreen(tile_width, tile_height) {
+    const ctx = this.outlineScreen.ctx;
+    const buffer = this.outlineScreen;
+
+    const line_width = ctx.lineWidth;
 
     ctx.beginPath()
-    draw_one_tile(0, 0);
+    for (let r = 0; r < 16; ++r) {
+      for (let c = 0; c < 16; ++c) {
+        this.pathTile(r * tile_width, c * tile_height, tile_width, tile_height, buffer);
+      }
+    }
     ctx.stroke();
+
     const tr = ctx.getTransform();
     ctx.setTransform(1, 0, 0, 1, 0, 0); 
     {
-      let current_width  = tile_width;
-      let current_height = tile_height;
+      let current_width  = 16 * tile_width;
+      let current_height = 16 * tile_height;
+      
+
       while (current_width < buffer.width || current_height < buffer.height) {
+        const cwl = Math.ceil(buffer.dpr * (current_width  + line_width) + 2);
+        const cw =  Math.ceil(buffer.dpr * (current_width));
+        const chl = Math.ceil(buffer.dpr * (current_height + line_width) + 2);
+        const ch =  Math.ceil(buffer.dpr * (current_height));
         // do 3 drawing calls
         ctx.drawImage(buffer.device, 
           0, 0, 
-          buffer.dpr * (current_width + line_width), 
-          buffer.dpr * (current_height + line_width),
-          buffer.dpr * current_width, 
-          buffer.dpr * 0, 
-          buffer.dpr * (current_width + line_width), 
-          buffer.dpr * (current_height + line_width),
+          cwl, chl,
+          cw, ch, 
+          cwl, chl,
         );
         ctx.drawImage(buffer.device, 
           0, 0, 
-          buffer.dpr * (current_width + line_width), 
-          buffer.dpr * (current_height + line_width),
-          buffer.dpr * 0, 
-          buffer.dpr * current_height, 
-          buffer.dpr * (current_width + line_width), 
-          buffer.dpr * (current_height + line_width),
+          cwl, chl,
+          0, ch, 
+          cwl, chl,
         );
         ctx.drawImage(buffer.device, 
           0, 0, 
-          buffer.dpr * (current_width + line_width), 
-          buffer.dpr * (current_height + line_width),
-          buffer.dpr * current_width, 
-          buffer.dpr * current_height, 
-          buffer.dpr * (current_width + line_width), 
-          buffer.dpr * (current_height + line_width),
+          cwl, chl,
+          cw, 0,
+          cwl, chl,
         );
 
         current_width  *= 2;
         current_height *= 2;
       }
     }
+    ctx.setTransform(tr)
 
-    // finally output it to the screen
-    const hex = new HexOddQ(bb.minX, bb.minY);
+  }
+  
+  OUTLINE_LINE_WEIGTH = 0.25;
+  lastKnownOutlineZ = undefined;
+  lastKnownCameraZ = undefined;
+
+  drawOutlineScreen(z) {
+    const buffer = this.outlineScreen;
+    const ctx    = this.outlineScreen.ctx;
+
+    const tile = this.tile(0, 0, z);
+
+    const render_width  = this.screen.width  + (tile.width * 4);
+    const render_height = this.screen.height + (tile.height * 4);
+
+    const camera = this.camera;
+    const unit = camera.getUnitScale(z);
+    const line_width = this.OUTLINE_LINE_WEIGTH * unit;
+
+    buffer.device.width  =  render_width * render.screen.dpr;
+    buffer.device.height = render_height * render.screen.dpr;
+    buffer.dpr = render.screen.dpr;
+    
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = line_width;
+    ctx.imageSmoothingEnabled = false;
+    this.fillOutlineScreen(tile.width, tile.height);
+  }
+  
+  hexagonSize(z) {
+    return this.unitPixelScale(z);
+  }
+
+  tile(x, y, z, bb=null) {
+    const hexagon_size = this.hexagonSize(z);
+    const hexagon_height = hexagon_size * Math.sqrt(3)
+
+    const tile_width  = 3 * hexagon_size;
+    const tile_height = hexagon_height;
+    return BoundingBox.recOrNew(bb, x, x + tile_width, y, y + tile_height);
+  }
+
+  /**
+   * fast logarithmic outline drawing
+   */
+  redrawOutline(z, bb) {
+    this.drawOutlineScreen(z);
+    this.outputOutlineScreenToScreen(z, bb);
+
+    this.lastKnownOutlineZ = z;
+    this.lastKnownCameraZ  = this.camera.z;
+  }
+
+  drawOutlineDirect(z, bounding_box) {
+    const ctx = this.screen.ctx;
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = this.camera.getUnitScale(z) * this.OUTLINE_LINE_WEIGTH;
+
+    let hex = new HexOddQ(0, 0);
+    let vec = new Vec2(0, 0);
+    let tile = this.tile(0, 0, z);
+    
+    ctx.beginPath();
+    for (let row = bounding_box.minY; row <= bounding_box.maxY; row++) {
+      for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
+        HexOddQ.rec(hex, col, row);
+        oddq_to_vec2(hex, vec)
+        this.xy_logicalToScreen(vec.x, vec.y, z, vec)
+        this.tile(vec.x, vec.y, z, tile)
+        this.pathTile(tile.minX, tile.minY, tile.width, tile.height, this.screen); 
+      }
+    }
+    ctx.stroke();
+  }
+
+  outputOutlineScreenToScreen(z, bb) {
+    const hex = new HexOddQ(bb.minX - 1, bb.minY - 1);
     const vec = oddq_to_vec2(hex);
     const hex_center_screen = this.xy_logicalToScreen(vec.x, vec.y, z)
+    const tile = this.tile(hex_center_screen.x, hex_center_screen.y, z);
+
     const tr2 = this.screen.ctx.getTransform();
     this.screen.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.screen.ctx.drawImage(buffer.device,
+    this.screen.ctx.drawImage(this.outlineScreen.device,
       0, 0, 
-      buffer.dpr * render_width ,
-      buffer.dpr * render_height,
-      buffer.dpr * (hex_center_screen.x - tile_center_x),
-      buffer.dpr * (hex_center_screen.y - tile_center_y),
-      buffer.dpr * render_width, 
-      buffer.dpr * render_height
+      this.outlineScreen.device.width,
+      this.outlineScreen.device.height,
+      this.outlineScreen.dpr * (tile.centerX),
+      this.outlineScreen.dpr * (tile.centerY),
+      this.outlineScreen.device.width,
+      this.outlineScreen.device.height,
     )
-    ctx.setTransform(tr)
     this.screen.ctx.setTransform(tr2)
   }
+ 
+  /**
+   * @method
+   */
+  drawOutline = ((cameraZ, lastZ) => function(z, bounding_box, reuse=true) {
+    const visible = (bounding_box.maxY - bounding_box.minY + 1)
+                  * (bounding_box.maxX - bounding_box.minX + 1);
+  
+    reuse &= (z === lastZ && cameraZ === this.camera.z);
+    cameraZ = this.camera.z;
+    lastZ = z;
+                 
+    if (visible > 100 && reuse) {
+      this.outputOutlineScreenToScreen(z, bounding_box);
+    } else if (visible > 100) {
+      this.redrawOutline(z, bounding_box);
+    } else {
+      this.drawOutlineDirect(z, bounding_box);
+    }
+  })();
 
   /**
    * draw hexagon with specified color and text using cartesian coordinates
@@ -1785,7 +1845,7 @@ class Render {
 
     const ctx  = this.screen.ctx;
     const unit = this.camera.getUnitScale(z); 
-    const size = this.unitPixelScale(z);
+    const size = this.hexagonSize(z);
 
     ctx.save()
     {
@@ -1874,40 +1934,23 @@ function draw_grid() {
   }
   // draw text
   if (camera.z <= 2) {
-    // draw text
-    //
     const size = render.unitPixelScale(0);
     render.screen.ctx.font = `${size/3}px Arial`; // Adjust font size as needed to fit the circle
     render.screen.ctx.fillStyle = 'black';
     render.screen.ctx.textAlign = 'center'; // Center the text horizontally
     render.screen.ctx.textBaseline = 'middle'; // Center the text vertically
+    let vec = null;
     for (let row = bounding_box.minY; row <= bounding_box.maxY; row++) {
       for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
-        // reuse hex
+        const text = `${hex.col} ${hex.row}`;
         HexOddQ.rec(hex, col, row);
-        render.oddq_drawHexagon(hex, 0, (ctx, unit, size) => {
-          const text = `${hex.col} ${hex.row}`;
-          // now add text there 
-          ctx.fillText(text, 0, 0);
-        })
+        vec = oddq_to_vec2(hex, vec);
+        vec = render.xy_logicalToScreen(vec.x, vec.y, 0, vec);
+        render.screen.ctx.fillText(text, vec.x, vec.y);
       }
     }
   }
-
-  if (camera.z >= 1.5) {
-    render.drawOutline(0);
-  } else {
-    render.screen.ctx.lineWidth = render.camera.getUnitScale(0) * 0.25;
-    for (let row = bounding_box.minY; row <= bounding_box.maxY; row++) {
-      for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
-        // reuse hex
-        HexOddQ.rec(hex, col, row);
-        render.oddq_drawHexagon(hex, 0, (ctx, unit, size) => {
-          ctx.stroke();
-        })
-      }
-    }
-  }
+  render.drawOutline(0, bounding_box);
   update_lists(new_active, new_done, new_locked);
 }
 
