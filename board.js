@@ -1517,6 +1517,9 @@ class Render {
       this.screen.ctx.restore();
     }
   }
+  
+
+  screenChanged = false;
 
   /**
    * Update screen dimension with respect to the visible dimension for the user.
@@ -1526,6 +1529,7 @@ class Render {
     if (dpr    === window.devicePixelRatio && 
         width  === this.screen.device.clientWidth &&
         height === this.screen.device.clientHeight) {
+      this.screenChanged = false;
       return;
     }
     dpr    = window.devicePixelRatio;
@@ -1535,6 +1539,7 @@ class Render {
     this.screen.dpr    = dpr;
     this.screen.width  = width;
     this.screen.height = height;
+    this.screenChanged = true;
   })();
 
   /**
@@ -1824,7 +1829,7 @@ class Render {
     const visible = (bounding_box.maxY - bounding_box.minY + 1)
                   * (bounding_box.maxX - bounding_box.minX + 1);
   
-    reuse &= (z === lastZ && cameraZ === this.camera.z);
+    reuse &= (z === lastZ && cameraZ === this.camera.z && !this.screenChanged);
     cameraZ = this.camera.z;
     lastZ = z;
                  
