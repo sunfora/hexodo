@@ -41,7 +41,6 @@ const description = document.querySelector('#task-description');
 const header = document.querySelector('#task-form-header');
 const completed = document.querySelector('#task-completed');
 
-
 /**
  * struct HexInfo(
  *    status?: string = "loading", 
@@ -177,8 +176,6 @@ class HexInfo {
     return HexInfo.rec(other, status, id, type, title, completed, description);
   }
 }
-
-
 
 /**
  * Usage: for tracking down the visible part of the world.
@@ -453,7 +450,20 @@ class Camera {
  *   What actions I do now. And so and so forth.
  */
 class GameState {
-  constuctor() {
+  camera;
+  render;
+  storage;
+  selected;
+  underCursor;
+  running;
+  tool;
+  domEventsController;
+
+  constructor() {
+    this.camera = new Camera();
+    this.render = new Render(this.camera, new ScreenDPR(window.devicePixelRatio, canvas));
+    this.storage = new ChunkStorage();
+
     this.selected = {
       hex: new HexOddQ(0, 0),
       info: new HexInfo(),
@@ -464,8 +474,12 @@ class GameState {
       info: new HexInfo(),
       time: Date.now()
     }
+    this.running = false;
+    this.tool = "drag";
+    this.domEventsController = null;
   }
 }
+
 
 let done = [];
 let locked = [];
@@ -547,30 +561,19 @@ function update_active_list(new_list) {
   }
 }
 
-let under_cursor = {
-  hex: new HexOddQ(0, 0),
-  time: 0
-}
-
-let selected = {
-  hex: new HexOddQ(0, 0),
-  info: new HexInfo()
-}
-
 function update_form(header_message) {
-  title.value        = selected.info.title;
-  description.value  = selected.info.description;
-  completed.checked  = selected.info.completed;
+  title.value        = game.selected.info.title;
+  description.value  = game.selected.info.description;
+  completed.checked  = game.selected.info.completed;
   header.textContent = header_message;
 }
 
 function update_selected() {
-  selected.info.title       = title.value;
-  selected.info.description = description.value;
-  selected.info.completed   = completed.checked;
+  game.selected.info.title       = title.value;
+  game.selected.info.description = description.value;
+  game.selected.info.completed   = completed.checked;
 }
 
-let camera = new Camera();
 
 async function request_cell_remove(which) {
   const response = await fetch(`api/boards/${board_id}/cells?row=${which.row}&col=${which.col}`, {
@@ -582,22 +585,22 @@ async function request_cell_remove(which) {
 }
 
 function stub_task() {
-  return new HexInfo('loaded', null, 'task', 'New task', false, 'description');
+  return new HexInfo('dirty', null, 'task', 'New task', false, 'description');
 }
 
 function form_new_task() {
-  stub_task().copyTo(selected.info);
+  stub_task().copyTo(game.selected.info);
   update_form('Create task');
 }
 
 function form_edit_task(task) {
-  task.copyTo(selected.info);
-  update_form(`Edit task: ${selected.info.id}`);
+  task.copyTo(game.selected.info);
+  update_form(`Edit task: ${game.selected.info.id}`);
 }
 
 function task_from_backend(backend_data) {
   return new HexInfo(
-    'loaded',
+    'dirty',
     backend_data.task_id,
     'task',
     backend_data.task_title,
@@ -640,7 +643,6 @@ async function request_hex(hex) {
  * struct Chunk(col: number, row: number)
  */
 class Chunk {
-
   /**
    * The size of the chunk in terms of size x size of hexes
    * So currently 16 x 16 = 256
@@ -805,11 +807,11 @@ class ChunkStorage {
   /**
    * unprocessed
    */
-  static inbox = [];
+  inbox = [];
   
-  static cycles = 0;
+  cycles = 0;
   
-  static queue = [
+  queue = [
     {cycles: 8,   tasks: []},  // 0  lod 0 near camera
     {cycles: 16,  tasks: []},  // 1  lod 1 huge near camera
     {cycles: 32,  tasks: []},  // 2  lod 2 minimap
@@ -825,7 +827,7 @@ class ChunkStorage {
    *   - completion status
    *   - block type
    */
-  static LOD_0 = 1;
+  LOD_0 = 1;
 
   /**
    * Level of Details 1 (number chunks: 4x4)
@@ -833,7 +835,7 @@ class ChunkStorage {
    *   - title 
    *   - block type
    */
-  static LOD_1 = 4;
+  LOD_1 = 4;
 
   /**
    * Level of Details 2 (number chunks: 16x16)
@@ -841,44 +843,44 @@ class ChunkStorage {
    *   - single low resolution texture
    *   TODO(ivan): implement on server side
    */
-  static LOD_2 = 16;
+  LOD_2 = 16;
 
   /**
    * Not more than 10 individual fetches from the user.
    */
-  static MAX_TOTAL_CONCURRENT_REQUESTS = 10;
+  MAX_TOTAL_CONCURRENT_REQUESTS = 10;
 
   /**
    * Client should not exceed this number of requests per session.
    * TODO(ivan): create strict serverside limit and return SERVER_IS_BUSY or something
    */
-  static MAX_CHUNK_CONCURRENT_REQUESTS = 8;
+  MAX_CHUNK_CONCURRENT_REQUESTS = 8;
 
   /**
    * Optimal requests to server
    */
-  static OPT_CHUNK_CONCURRENT_REQUESTS = 4;
+  OPT_CHUNK_CONCURRENT_REQUESTS = 4;
 
   /**
    * Client should not exceed this number of requests per session.
    * TODO(ivan): create strict serverside limit and return SERVER_IS_BUSY or something
    */
-  static MAX_CELL_CONCURRENT_REQUESTS = 4;
+  MAX_CELL_CONCURRENT_REQUESTS = 4;
 
   /**
    * Optimal requests of individual cells to the server
    */
-  static OPT_CELL_CONCURRENT_REQUESUT = 2;
+  OPT_CELL_CONCURRENT_REQUESUT = 2;
 
-  static total_requests = 0;
-  static cell_requests = 0;
-  static chunk_requests = 0;
+  total_requests = 0;
+  cell_requests = 0;
+  chunk_requests = 0;
   
   // TODO(ivan): not finished
-  static queue(event) {
+  queue(event) {
     switch (event.type) {
       case 'REQUEST_ALL_CAMERA_VISIBLE':
-        ChunkStorage.requestAllVisible(event.bounding_box);
+        this.requestAllVisible(event.bounding_box);
         break;
       case 'CELL_REMOVE':
         break;
@@ -891,7 +893,7 @@ class ChunkStorage {
    * Request all visible hexes inside bounding box
    * @param {BoundingBox} - bounding_box 
    */
-  static requestAllVisible(bounding_box) {
+  requestAllVisible(bounding_box) {
     const minX = bounding_box.minX - 1;
     const minY = bounding_box.minY;
     const maxX = bounding_box.maxX + 1;
@@ -904,8 +906,8 @@ class ChunkStorage {
 
     for (let col = minChunkX; col <= maxChunkX; ++col) {
       for (let row = minChunkY; row <= maxChunkY; ++row) {
-        if (!ChunkStorage.isLoaded(col, row) && !ChunkStorage.isLoading(col, row)) {
-          ChunkStorage.requestChunk(col, row)
+        if (!this.isLoaded(col, row) && !this.isLoading(col, row)) {
+          this.requestChunk(col, row)
         }
       }
     }
@@ -916,7 +918,7 @@ class ChunkStorage {
    * @param {number} col - chunk col
    * @param {number} row - chunk row
    */
-  static cellsColRow(col, row) {
+  cellsColRow(col, row) {
   }
 
   /**
@@ -924,24 +926,24 @@ class ChunkStorage {
    * @param {number} col - chunk col
    * @param {number} row - chunk row
    */
-  static cellsChunk(chunk) {
+  cellsChunk(chunk) {
   }
 
   /**
    * Checks is chunk loaded?
    */
-  static isLoaded(col, row) {
+  isLoaded(col, row) {
     const key = `${col},${row}`;
-    const storage = ChunkStorage.storage;
+    const storage = this.storage;
     return storage.has(key);
   }
 
   /**
    * Checks is chunk loading?
    */
-  static isLoading(col, row) {
+  isLoading(col, row) {
     const key = `${col},${row}`;
-    const loading = ChunkStorage.loading;
+    const loading = this.loading;
     return loading.has(key);
   }
   
@@ -949,11 +951,11 @@ class ChunkStorage {
    * Send request to the server for a chunk, write it to storage.
    * @returns {Response} - the result of operation
    */
-  static async requestChunk(col, row) {
+  async requestChunk(col, row) {
     const key = `${col},${row}`;
 
-    const loading = ChunkStorage.loading;
-    const storage = ChunkStorage.storage;
+    const loading = this.loading;
+    const storage = this.storage;
 
     // abort pending request to same place
     const old = loading.get(key);
@@ -977,21 +979,21 @@ class ChunkStorage {
       
       /**  @type {HexInfo[]} chunk */
       let chunk;
-      if (!ChunkStorage.isLoaded(col, row)) {
+      if (!this.isLoaded(col, row)) {
         chunk = new Array(Chunk.SIZE * Chunk.SIZE).fill(null);
         for (let i = 0; i < chunk.length; ++i) {
-          chunk[i] = new HexInfo('loaded');
+          chunk[i] = new HexInfo('dirty');
         }
-        storage.set(key, chunk);
+        game.storage.set(key, chunk);
       } else {
-        chunk = storage.get(key);
+        chunk = game.storage.get(key);
       }
 
       // set them to be empty 
-      chunk.forEach(info => HexInfo.rec(info, 'loaded'));
+      chunk.forEach(info => HexInfo.rec(info, 'dirty'));
       // set values
       for (const point of points) {
-        const point_id = ChunkStorage.hexID(point.cell_col, point.cell_row);
+        const point_id = this.cr_hexID(point.cell_col, point.cell_row);
         chunk[point_id].type = 'task';
         chunk[point_id].id = point.task_id;
         chunk[point_id].completed = point.task_completed;
@@ -1006,9 +1008,9 @@ class ChunkStorage {
     }
   }
 
-  static processInbox() {
+  processInbox() {
   // TODO(ivan): not finished
-    for (const action of ChunkStorage.inbox) {
+    for (const action of this.inbox) {
       
     }
   }
@@ -1019,51 +1021,71 @@ class ChunkStorage {
    * @param {?HexInfo} target - reuse 
    * @returns {HexInfo} - info on given hex
    */
-  static getHexInfoOddQ(hex, target=null) {
-    return ChunkStorage.getHexInfoColRow(hex.col, hex.row, target);
+  oddq_getHexInfo(hex, target=null) {
+    return this.getHexInfoColRow(hex.col, hex.row, target);
   }
 
-  static hexID(col, row) {
+  cr_hexID(col, row) {
     const in_hex_col = gmath.rem(col, Chunk.SIZE);
     const in_hex_row = gmath.rem(row, Chunk.SIZE);
     const hex_id = in_hex_row * Chunk.SIZE + in_hex_col;
     return hex_id;
   }
 
-  static refChunkColRow(col, row) {
+  cr_refChunk(col, row) {
     const chunk = Chunk.fromColRow(col, row);
     const key = `${chunk.col},${chunk.row}`;
-    return ChunkStorage.storage.get(key);
+    return this.storage.get(key);
   }
   
-  static hexLoaded(hex) {
+  oddq_hexLoaded(hex) {
     const chunk = Chunk.fromHexOddQ(hex);
-    return ChunkStorage.isLoaded(chunk.col, chunk.row);   
+    return this.isLoaded(chunk.col, chunk.row);   
   }
 
-  static hexLoadedColRow(col, row) {
+  cr_hexLoaded(col, row) {
     const chunk = Chunk.fromColRow(col, row);
-    return ChunkStorage.isLoaded(chunk.col, chunk.row);   
+    return this.isLoaded(chunk.col, chunk.row);   
   }
 
-  static updateHexInfo(hex, info) {
-    ChunkStorage.updateHexInfoColRow(hex.col, hex.row, info);
+  oddq_updateHexInfo(hex, info) {
+    this.cr_updateHexInfo(hex.col, hex.row, info);
   }
 
-  static updateHexInfoColRow(col, row, info) {
-    const chunk = ChunkStorage.refChunkColRow(col, row);
-    const id    = ChunkStorage.hexID(col, row);
+  cr_updateHexInfo(col, row, info) {
+    const chunk = this.cr_refChunk(col, row);
+    const id    = this.cr_hexID(col, row);
     if (chunk) {
       info.copyTo(chunk[id]);
     } else {
       console.error("not loaded"); 
     }
   }
-  
-  static EMPTY = new HexInfo('loaded')
 
-  static removeCell(col, row) {
-    ChunkStorage.updateHexInfoColRow(col, row, ChunkStorage.EMPTY);
+  cr_updateHexInfoStatus(col, row, status) {
+     
+  }
+  
+  EMPTY = new HexInfo('dirty')
+
+  // TODO add comment
+  cr_removeCell(col, row) {
+    this.cr_updateHexInfo(col, row, this.EMPTY);
+    this.cr_updateHexInfoStatus(
+      HexOddQ.cr_topCol(col, row), 
+      HexOddQ.cr_topRow(col, row),
+      "dirty"
+    );
+    this.cr_updateHexInfoStatus(
+      HexOddQ.cr_topLeftCol(col, row), 
+      HexOddQ.cr_topLeftRow(col, row),
+      "dirty"
+    );
+    this.cr_updateHexInfoStatus(
+      HexOddQ.cr_topRightCol(col, row), 
+      HexOddQ.cr_topRightRow(col, row),
+      "dirty"
+    );
   }
 
   /**
@@ -1073,28 +1095,28 @@ class ChunkStorage {
    * @param {?HexInfo} target - reuse 
    * @returns {HexInfo} - info on given hex
    */
-  static getHexInfoColRow(col, row, target=null) {
+  getHexInfoColRow(col, row, target=null) {
     // set stub if nothing
     const result = HexInfo.recOrNew(target, 'loading');
     // locate chunk
     const chunk = Chunk.fromColRow(col, row);
     const key = `${chunk.col},${chunk.row}`;
     // find the id of hex in array
-    const hex_id = ChunkStorage.hexID(col, row);
+    const hex_id = this.cr_hexID(col, row);
     // copy if there is anything
-    if (ChunkStorage.storage.has(key)) {
-      ChunkStorage.storage.get(key)[hex_id].copyTo(result);
+    if (this.storage.has(key)) {
+      this.storage.get(key)[hex_id].copyTo(result);
     }
     return result;
   }
 
-  static updateStatus(hex) {
+  updateStatus(hex) {
     
   }
 
   // TODO(ivan): not finished
-  static storage = new Map();
-  static loading = new Map();
+  storage = new Map();
+  loading = new Map();
 }
 
 /**
@@ -1617,9 +1639,6 @@ class Render {
     ctx.translate(size * Math.cos(angle), size * Math.sin(angle));
   }
 
-
-  drawChunk
-
   prerenderedChunks = new Map();
 
   /**
@@ -1693,8 +1712,7 @@ class Render {
     ctx.setTransform(1, 0, 0, 1, 0, 0); 
     {
       let current_width  = 16 * tile_width;
-      let current_height = 16 * tile_height;
-      
+      let current_height = 16 * tile_height; 
 
       while (current_width < buffer.width || current_height < buffer.height) {
         const cwl = Math.ceil(buffer.dpr * (current_width  + line_width) + 2);
@@ -1726,7 +1744,6 @@ class Render {
       }
     }
     ctx.setTransform(tr)
-
   }
   
   OUTLINE_LINE_WEIGTH = 0.25;
@@ -1746,9 +1763,9 @@ class Render {
     const unit = camera.getUnitScale(z);
     const line_width = this.OUTLINE_LINE_WEIGTH * unit;
 
-    buffer.device.width  =  render_width * render.screen.dpr;
-    buffer.device.height = render_height * render.screen.dpr;
-    buffer.dpr = render.screen.dpr;
+    buffer.device.width  =  render_width * this.screen.dpr;
+    buffer.device.height = render_height * this.screen.dpr;
+    buffer.dpr = this.screen.dpr;
     
     ctx.strokeStyle = 'black';
     ctx.lineWidth = line_width;
@@ -1871,7 +1888,7 @@ class Render {
   }
 }
 
-const render = new Render(camera, new ScreenDPR(window.devicePixelRatio, canvas));
+const game = new GameState();
 
 const EMPTY    = { r: 255, g: 255, b: 255 }; // white
 const SELECTED = { r: 255, g: 215, b: 0   }; // gold
@@ -1880,8 +1897,33 @@ const TODO     = { r: 255, g: 165, b: 0   }; // orange
 const LOCKED   = { r: 175, g: 157, b: 154 }; // #AF9D9A
 const LOADING  = { r: 128, g: 128, b: 128 }; // grey
 
+function status_to_color(status) {
+  let calculated_color;
+  switch (status) {
+    case 'done':
+      calculated_color = DONE;
+      break;
+    case 'empty':
+      calculated_color = EMPTY;
+      break;
+    case 'todo':
+      calculated_color = TODO;
+      break;
+    case 'locked':
+      calculated_color = LOCKED;
+      break;
+    case 'loading':
+      calculated_color = LOADING;
+      break;
+    default:
+      debugger;
+      break;
+  }
+  return calculated_color;
+}
+
 function draw_grid() {
-  let bounding_box = cull_hexes(render.camera);
+  let bounding_box = cull_hexes(game.render.camera);
   
 
   const HIGHLIGHT_DURATION = 200;
@@ -1904,148 +1946,147 @@ function draw_grid() {
   
   let hex = new HexOddQ(0, 0);
   let info = new HexInfo();
-  // draw color
+
+  // draw color of chunks
+  let last_color;
+  game.render.screen.ctx.save()
   for (let row = bounding_box.minY; row <= bounding_box.maxY; row++) {
     for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
       // reuse hex
       HexOddQ.rec(hex, col, row);
 
-      let calculated_color = calculate_color(hex, info);
-      let value = ChunkStorage.getHexInfoOddQ(hex, info);
+      let status = calculate_color(hex, info);
+      let value = game.storage.oddq_getHexInfo(hex, info);
 
-      if (calculated_color === DONE) {
+      if (status === 'done') {
         new_done.push({...value, ...hex});
-      } else if (calculated_color === TODO) {
+      } else if (status === 'todo') {
         new_active.push({...value, ...hex});
-      } else if (calculated_color === LOCKED) {
+      } else if (status === 'locked') {
         new_locked.push({...value, ...hex});
       }
+      
+      let calculated_color = status_to_color(status);
 
-      if (hex.equals(under_cursor.hex)) {
-        let nt = Math.min(Date.now() - under_cursor.time, HIGHLIGHT_DURATION) / HIGHLIGHT_DURATION;
-        calculated_color = lerp_color(calculated_color, SELECTED, nt);
-      } else if (hex.equals(selected.hex)) {
-        let nt = Math.abs(Math.sin(Date.now() / 500));
-        calculated_color = lerp_color(calculated_color, SELECTED, nt);
-      }
-
+      const ctx  = game.render.screen.ctx;
       if (calculated_color !== EMPTY) {
-        render.oddq_drawHexagon(hex, 0, (ctx) => {
-          ctx.fillStyle = color_to_style(calculated_color);
+        
+        const vec = oddq_to_vec2(hex);
+        const {x: screen_x, y: screen_y} = game.render.xy_logicalToScreen(vec.x, vec.y, 0);
+
+        const size = game.render.hexagonSize(0);
+
+        {
+          ctx.translate(screen_x, screen_y);
+          // create path for hexagon and stroke / fill it
+          Render.path_hexagon(ctx, size);
+          if (!last_color || last_color !== calculated_color) {
+            ctx.fillStyle = color_to_style(calculated_color);
+            last_color = calculate_color;
+          }
           ctx.fill();
-        });
+          ctx.translate(-screen_x, -screen_y);
+        }
       }
     }
   }
+  game.render.screen.ctx.restore()
+  last_color = null;
+
+  // update colors for selected
+  {
+    const selected_status = calculate_color(game.selected.hex)
+    let selected_color = status_to_color(selected_status);
+    let nt = Math.abs(Math.sin(Date.now() / 500));
+    selected_color = lerp_color(selected_color, SELECTED, nt);
+    game.render.oddq_drawHexagon(game.selected.hex, 0, (ctx) => {
+      ctx.fillStyle = color_to_style(selected_color);
+      ctx.fill();
+    })
+  }
+  // update colors for underCursor
+  {
+    const under_status = calculate_color(game.underCursor.hex)
+    let under_color = status_to_color(under_status);
+    let nt = Math.min(Date.now() - game.underCursor.time, HIGHLIGHT_DURATION) / HIGHLIGHT_DURATION;
+    under_color = lerp_color(under_color, SELECTED, nt);
+    game.render.oddq_drawHexagon(game.underCursor.hex, 0, (ctx) => {
+      ctx.fillStyle = color_to_style(under_color);
+      ctx.fill();
+    })
+  }
+
   // draw text
-  if (camera.z <= 2) {
-    const size = render.unitPixelScale(0);
-    render.screen.ctx.font = `${size/3}px Arial`; // Adjust font size as needed to fit the circle
-    render.screen.ctx.fillStyle = 'black';
-    render.screen.ctx.textAlign = 'center'; // Center the text horizontally
-    render.screen.ctx.textBaseline = 'middle'; // Center the text vertically
+  if (game.camera.z <= 2) {
+    const size = game.render.unitPixelScale(0);
+    game.render.screen.ctx.font = `${size/3}px Arial`; // Adjust font size as needed to fit the circle
+    game.render.screen.ctx.fillStyle = 'black';
+    game.render.screen.ctx.textAlign = 'center'; // Center the text horizontally
+    game.render.screen.ctx.textBaseline = 'middle'; // Center the text vertically
     let vec = null;
     for (let row = bounding_box.minY; row <= bounding_box.maxY; row++) {
       for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
         const text = `${hex.col} ${hex.row}`;
         HexOddQ.rec(hex, col, row);
         vec = oddq_to_vec2(hex, vec);
-        vec = render.xy_logicalToScreen(vec.x, vec.y, 0, vec);
-        render.screen.ctx.fillText(text, vec.x, vec.y);
+        vec = game.render.xy_logicalToScreen(vec.x, vec.y, 0, vec);
+        game.render.screen.ctx.fillText(text, vec.x, vec.y);
       }
     }
   }
-  render.drawOutline(0, bounding_box);
+  game.render.drawOutline(0, bounding_box);
   update_lists(new_active, new_done, new_locked);
 }
 
+/**
+ * @param {HexOddQ} hex
+ */
 function calculate_color(hex, reuse=null) {
-  const row = hex.row;
-  const col = hex.col;
+  const info = game.storage.oddq_getHexInfo(hex, reuse);
 
-  // NOTE(ivan): I will reuse this
-  const info = ChunkStorage.getHexInfoOddQ(hex, reuse);
+  if (info.status !== 'loading' && info.status !== 'dirty') {
+    return info.status;  
+  }
 
-  // okay we do it right there
   const current_status    = info.status;
   const current_completed = info.completed;
   const current_is_empty  = info.type === "empty";
-  
-  let below_col, left_col, right_col;
-  let below_row, left_row, right_row;
 
-  // okay get them
-  if (col & 1) {
-    below_col = col;
-    below_row = row + 1;
-    
-    left_col  = col - 1;
-    left_row  = row + 1;
-
-    right_col = col + 1;
-    right_row = row + 1;
-  } else {
-    below_col = col;
-    below_row = row + 1;
-
-    left_col  = col - 1;
-    left_row  = row;
-
-    right_col = col + 1;
-    right_row = row;
+  let all_loaded = current_status !== 'loading';
+  let unlocked = true;
+  for (let i = 2; i <= 4; ++i) {
+    let col = hex.circleNeighbourCol(i)
+    let row = hex.circleNeighbourRow(i)
+    game.storage.getHexInfoColRow(col, row, info);
+    all_loaded &&= info.status !== 'loading';
+    unlocked   &&= info.type === "empty" || info.completed;
   }
-
-  let below_status, left_status, right_status;
-  let below_completed, left_completed, right_completed;
-  let below_is_empty, left_is_empty, right_is_empty;
-
-  ChunkStorage.getHexInfoColRow(below_col, below_row, info);
-  below_status    = info.status;
-  below_completed = info.completed;
-  below_is_empty  = info.type === "empty";
-  ChunkStorage.getHexInfoColRow(left_col, left_row, info);
-  left_status    = info.status;
-  left_completed = info.completed;
-  left_is_empty  = info.type === "empty";
-  ChunkStorage.getHexInfoColRow(right_col, right_row, info);
-  right_status    = info.status;
-  right_completed = info.completed;
-  right_is_empty  = info.type === "empty";
-
-  let calculated_color;
-
-  const all_loaded = current_status !== 'loading'
-                  && below_status   !== 'loading'
-                  && left_status    !== 'loading'
-                  && right_status   !== 'loading';
+  
+  let updated_status = 'loading';
 
   if (all_loaded) {
-    const unlocked = (below_is_empty || below_completed)
-                  && ( left_is_empty ||  left_completed)
-                  && (right_is_empty || right_completed);
     if (current_is_empty) {
-      calculated_color = EMPTY;
+      updated_status = 'empty';
     } else if (current_completed) {
-      calculated_color = DONE;
+      updated_status = 'done';
     } else if (unlocked) {
-      calculated_color = TODO;
+      updated_status = 'todo';
     } else {
-      calculated_color = LOCKED;
+      updated_status = 'locked'
     }
-  } else {
-    calculated_color = LOADING;
   }
 
-  return calculated_color;
+  game.storage.cr_updateHexInfoStatus(hex.col, hex.row, updated_status);
+  return updated_status;
 }
 
 function draw_animation_frame() {
 
   // update camera fovX, fovY automatically
-  render.updateScreenDimensions();
-  render.screen.clear();
-  render.cameraToScreen();
-  camera.withFreeze(draw_grid);
+  game.render.updateScreenDimensions();
+  game.render.screen.clear();
+  game.render.cameraToScreen();
+  game.camera.withFreeze(draw_grid);
 }
 
 let canvasFrame = null;
@@ -2064,23 +2105,17 @@ function swap_event_buffers() {
   UI_event_frame = frame;
 }
 
-let game = {
-  tool: 'drag',
-  running: false,
-  domEventsController: null
-};
-
 
 async function save_selected() {
   const form_data = new URLSearchParams();
 
-  form_data.append('task_description', selected.info.description);
-  form_data.append('task_title',       selected.info.title);
-  form_data.append('task_id',          selected.info.id);
-  form_data.append('task_completed',   selected.info.completed);
+  form_data.append('task_description', game.selected.info.description);
+  form_data.append('task_title',       game.selected.info.title);
+  form_data.append('task_id',          game.selected.info.id);
+  form_data.append('task_completed',   game.selected.info.completed);
   form_data.append('user_id', user_name); 
 
-  const response = await fetch(`/api/boards/${board_id}/cells?row=${selected.hex.row}&col=${selected.hex.col}`, {
+  const response = await fetch(`/api/boards/${board_id}/cells?row=${game.selected.hex.row}&col=${game.selected.hex.col}`, {
       method: 'POST', 
       headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -2092,8 +2127,8 @@ async function save_selected() {
   if (response.ok) {
     register_event()
     update_form_with_new_data(data);
-    if (ChunkStorage.hexLoaded(selected.hex))  {
-      ChunkStorage.updateHexInfo(selected.hex, selected.info);
+    if (game.storage.oddq_hexLoaded(game.selected.hex))  {
+      game.storage.oddq_updateHexInfo(game.selected.hex, game.selected.info);
     }
   }
 };
@@ -2130,7 +2165,7 @@ function wire_dom_events() {
   $(canvas).addEventListener('mouseenter', () => register_event('REQUEST_UI_FOCUS', {target: 'hexgrid'}));
   $(canvas).addEventListener('mouseleave', () => register_event('REQUEST_UI_BLUR' , {target: 'hexgrid'}));
   $(canvas).addEventListener('mousemove', (event) => register_event('GAME_MOUSE_MOVED', event));
-  $(canvas).addEventListener('dblclick', () => register_event('HEXAGON_SELECTED', {hex: under_cursor.hex}));
+  $(canvas).addEventListener('dblclick', () => register_event('HEXAGON_SELECTED', {hex: game.underCursor.hex}));
   $(canvas).addEventListener('wheel', (event) => {
     event.preventDefault()
     register_event('REQUEST_CAMERA_ZOOM', {delta: event.wheelDelta});
@@ -2200,7 +2235,7 @@ function process_pending_UI_events() {
         break;
       }
       case 'REQUEST_DRAG_START': {
-        const size = render.unitPixelScale(0);
+        const size = game.render.unitPixelScale(0);
         const drag_transform = {
           get x() {
             return (this.savedPageX - this.pageX) / size;
@@ -2214,9 +2249,9 @@ function process_pending_UI_events() {
           savedPageX: event.pageX,
           savedPageY: event.pageY
         }
-        camera.applyTransform();
-        camera.transform = drag_transform;
-        camera.isDragged = true;
+        game.camera.applyTransform();
+        game.camera.transform = drag_transform;
+        game.camera.isDragged = true;
         register_event('DRAG_STARTED', {drag: drag_transform});
         break;
       }
@@ -2233,24 +2268,24 @@ function process_pending_UI_events() {
         break;
       }
       case 'GAME_MOUSE_MOVED': {
-        if (camera.isDragged) {
-          camera.transform.pageX = event.pageX;
-          camera.transform.pageY = event.pageY;
+        if (game.camera.isDragged) {
+          game.camera.transform.pageX = event.pageX;
+          game.camera.transform.pageY = event.pageY;
           register_event('CAMERA_DRAGGED', {});
         }
-        let {x: logical_x, y: logical_y} = render.xy_clientToLogical(event.clientX, event.clientY, 0);
+        let {x: logical_x, y: logical_y} = game.render.xy_clientToLogical(event.clientX, event.clientY, 0);
         let hex = xy_nearest_oddq(logical_x, logical_y)
-        if (!(hex.equals(under_cursor.hex))) {
-          hex.copyTo(under_cursor.hex);
-          under_cursor.time = Date.now()
+        if (!(hex.equals(game.underCursor.hex))) {
+          hex.copyTo(game.underCursor.hex);
+          game.underCursor.time = Date.now()
         }
         register_event('UNDER_CURSOR_CHANGED', {});
         break;
       }
       case 'REQUEST_DRAG_STOP': {
-        if (camera.isDragged) {
-          camera.isDragged = false;
-          camera.applyTransform();
+        if (game.camera.isDragged) {
+          game.camera.isDragged = false;
+          game.camera.applyTransform();
           register_event('DRAG_STOPPED', {});
           register_event('CAMERA_MOVED', {});
         }
@@ -2295,16 +2330,16 @@ function process_pending_UI_events() {
           get t() {
             return Math.min((Date.now() - this.start) / transition_duration, 1);
           },
-          fromX: camera.x,
-          fromY: camera.y,
+          fromX: game.camera.x,
+          fromY: game.camera.y,
           toX: event.x,
           toY: event.y,
           start: Date.now()
         }
-        camera.applyTransform();
-        camera.x = event.x;
-        camera.y = event.y;
-        camera.transform = transition;
+        game.camera.applyTransform();
+        game.camera.x = event.x;
+        game.camera.y = event.y;
+        game.camera.transform = transition;
         register_event('CAMERA_MOVED', {x: event.x, y: event.y});
         break;
       }
@@ -2312,7 +2347,7 @@ function process_pending_UI_events() {
         break;
       }
       case 'REQUEST_CAMERA_ZOOM': {
-        camera.z0UnitScale += event.delta / 3000;
+        game.camera.z0UnitScale += event.delta / 3000;
         register_event('CAMERA_ZOOMED', {});
         break;
       }
@@ -2346,8 +2381,8 @@ function process_pending_UI_events() {
       case 'HEX_REMOVED': {
         const col = event.hex.col;
         const row = event.hex.row;
-        if (ChunkStorage.hexLoadedColRow(col, row)) {
-          ChunkStorage.removeCell(col, row);
+        if (game.storage.hexLoadedColRow(col, row)) {
+          game.storage.cr_removeCell(col, row);
         }
         form_new_task();
         break;
@@ -2365,7 +2400,7 @@ function process_pending_UI_events() {
         if (old !== null) {
           old.classList.remove('selected');
         }
-        let now = list_view.querySelector(`[data-col="${selected.hex.col}"][data-row="${selected.hex.row}"]`);
+        let now = list_view.querySelector(`[data-col="${game.selected.hex.col}"][data-row="${game.selected.hex.row}"]`);
         if (now !== null) {
           now.classList.add('selected');
           now.scrollIntoView();
@@ -2373,10 +2408,10 @@ function process_pending_UI_events() {
         break;
       }
       case 'HEXAGON_SELECTED': {
-        selected.hex = HexOddQ.rec(selected.hex, event.hex.col, event.hex.row);
-        selected.time = Date.now();
+        game.selected.hex = HexOddQ.rec(game.selected.hex, event.hex.col, event.hex.row);
+        game.selected.time = Date.now();
         register_event('SELECTED_CHANGED', {});
-        request_hex(selected.hex)
+        request_hex(game.selected.hex)
           .then(update_form_with_new_task)
           .catch(console.log);
         let pos = oddq_to_vec2(event.hex);
@@ -2405,10 +2440,19 @@ function loop() {
 
   process_pending_UI_events();
   draw_animation_frame();
-  ChunkStorage.requestAllVisible(cull_hexes(camera, canvas));
+  game.storage.requestAllVisible(cull_hexes(game.camera));
 
   {
-    cam_debug.textContent = `cam(${camera.x.toFixed(5)}, ${camera.y.toFixed(5)}, ${camera.z.toFixed(5)})`;
+    const bb = cull_hexes(game.camera);
+    const visible = (bb.maxY - bb.minY + 1)
+                  * (bb.maxX - bb.minX + 1);
+    cam_debug.textContent = `cam(
+      ${game.camera.x.toFixed(5)}, 
+      ${game.camera.y.toFixed(5)}, 
+      ${game.camera.z.toFixed(5)}
+    ); 
+    visible = ${visible}
+    `;
     // render.drawCameraDebugRectangle()
   }
 
@@ -2440,7 +2484,7 @@ function game_start() {
 
   canvas.tabIndex = 0;
   canvas.focus();
-  register_event('HEXAGON_SELECTED', {hex: under_cursor.hex});
+  register_event('HEXAGON_SELECTED', {hex: game.underCursor.hex});
 
   game.running = true;
   requestAnimationFrame(loop);

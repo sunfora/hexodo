@@ -88,6 +88,254 @@ export class HexOddQ {
     const row = this.row
     return HexOddQ.rec(other, col, row);
   }
+  
+  get isEven() {
+    return this.col % 2 === 0;
+  }
+  get isOdd() {
+    return this.col % 2 !== 0;
+  }
+                               // 0   1  2  3   4   5
+  static COL_NEIGHBOURS       = [ 0,  1, 1, 0, -1, -1];
+  static ROW_NEIGHBOURS_ODD   = [-1,  0, 1, 1,  1,  0];
+  static ROW_NEIGHBOURS_EVEN  = [-1, -1, 0, 1,  0, -1];
+  
+  /**
+   *  5 \ 0 / 1
+   *  --- x ----
+   *  4 / 3 \ 2
+   */ 
+  static cr_circleNeighbourCol(col, row, i) {
+    return col + HexOddQ.COL_NEIGHBOURS[i];
+  }
+  /**
+   *  5 \ 0 / 1
+   *  --- x ----
+   *  4 / 3 \ 2
+   */ 
+  static cr_circleNeighbourRow(col, row, i) {
+    if (col & 1) {
+      return row + HexOddQ.ROW_NEIGHBOURS_EVEN[i];
+    } else {
+      return row + HexOddQ.ROW_NEIGHBOURS_ODD[i];
+    }
+  }
+
+  /**
+   *  5 \ 0 / 1
+   *  --- x ----
+   *  4 / 3 \ 2
+   */ 
+  circleNeighbourCol(i) {
+    return this.col + HexOddQ.COL_NEIGHBOURS[i];
+  }
+  /**
+   *  5 \ 0 / 1
+   *  --- x ----
+   *  4 / 3 \ 2
+   */ 
+  circleNeighbourRow(i) {
+    if (this.isEven) {
+      return this.row + HexOddQ.ROW_NEIGHBOURS_EVEN[i];
+    } else {
+      return this.row + HexOddQ.ROW_NEIGHBOURS_ODD[i];
+    }
+  }
+
+  /**
+   *  . \ * / .
+   *  --- x ----
+   *  . / . \ .
+   */ 
+  get topCol() {
+    return this.circleNeighbourCol(0);
+  }
+  /**
+   *  . \ * / .
+   *  --- x ----
+   *  . / . \ .
+   */ 
+  get topRow() {
+    return this.circleNeighbourRow(0);
+  }
+  /**
+   *  . \ . / *
+   *  --- x ----
+   *  . / . \ .
+   */ 
+  get topRightCol() {
+    return this.circleNeighbourCol(1);
+  }
+  /**
+   *  . \ . / *
+   *  --- x ----
+   *  . / . \ .
+   */ 
+  get topRightRow() {
+    return this.circleNeighbourRow(1);
+  }
+  /**
+   *  . \ . / .
+   *  --- x ----
+   *  . / . \ *
+   */ 
+  get botRightCol() {
+    return this.circleNeighbourCol(2);
+  }
+  /**
+   *  . \ . / .
+   *  --- x ----
+   *  . / . \ *
+   */ 
+  get botRightRow() {
+    return this.circleNeighbourRow(2);
+  }
+  /**
+   *  . \ . / .
+   *  --- x ----
+   *  . / * \ .
+   */ 
+  get botCol() {
+    return this.circleNeighbourCol(3);
+  }
+  /**
+   *  . \ . / .
+   *  --- x ----
+   *  . / * \ .
+   */ 
+  get botRow() {
+    return this.circleNeighbourRow(3);
+  }
+  /**
+   *  . \ . / .
+   *  --- x ----
+   *  * / . \ .
+   */ 
+  get botLeftCol() {
+    return this.circleNeighbourCol(4);
+  }
+  /**
+   *  . \ . / .
+   *  --- x ----
+   *  * / . \ .
+   */ 
+  get botLeftRow() {
+    return this.circleNeighbourRow(4);
+  }
+  /**
+   *  * \ . / .
+   *  --- x ----
+   *  . / . \ .
+   */ 
+  get topLeftCol() {
+    return this.circleNeighbourCol(5);
+  }
+  /**
+   *  * \ . / .
+   *  --- x ----
+   *  . / . \ .
+   */ 
+  get topLeftRow() {
+    return this.circleNeighbourRow(5);
+  }
+
+  /**
+   *  . \ * / .
+   *  --- x ----
+   *  . / . \ .
+   */ 
+  static cr_topCol(col, row) {
+    return HexOddQ.cr_circleNeighbourCol(col, row, 0);
+  }
+
+  /**
+   *  . \ * / .
+   *  --- x ----
+   *  . / . \ .
+   */ 
+  static cr_topRow(col, row) {
+    return HexOddQ.cr_circleNeighbourRow(col, row, 0);
+  }
+  /**
+   *  . \ . / *
+   *  --- x ----
+   *  . / . \ .
+   */ 
+  static cr_topRightCol(col, row) {
+    return HexOddQ.cr_circleNeighbourCol(col, row, 1);
+  }
+  /**
+   *  . \ . / *
+   *  --- x ----
+   *  . / . \ .
+   */ 
+  static cr_topRightRow(col, row) {
+    return HexOddQ.cr_circleNeighbourRow(col, row, 1);
+  }
+  /**
+   *  . \ . / .
+   *  --- x ----
+   *  . / . \ *
+   */ 
+  static cr_botRightCol(col, row) {
+    return HexOddQ.cr_circleNeighbourCol(col, row, 2);
+  }
+  /**
+   *  . \ . / .
+   *  --- x ----
+   *  . / . \ *
+   */ 
+  static cr_botRightRow(col, row) {
+    return HexOddQ.cr_circleNeighbourRow(col, row, 2);
+  }
+  /**
+   *  . \ . / .
+   *  --- x ----
+   *  . / * \ .
+   */ 
+  static cr_botCol(col, row) {
+    return HexOddQ.cr_circleNeighbourCol(col, row, 3);
+  }
+  /**
+   *  . \ . / .
+   *  --- x ----
+   *  . / * \ .
+   */ 
+  static cr_botRow(col, row) {
+    return HexOddQ.cr_circleNeighbourRow(col, row, 3);
+  }
+  /**
+   *  . \ . / .
+   *  --- x ----
+   *  * / . \ .
+   */ 
+  static cr_botLeftCol(col, row) {
+    return HexOddQ.cr_circleNeighbourCol(col, row, 4);
+  }
+  /**
+   *  . \ . / .
+   *  --- x ----
+   *  * / . \ .
+   */ 
+  static cr_botLeftRow(col, row) {
+    return HexOddQ.cr_circleNeighbourRow(col, row, 4);
+  }
+  /**
+   *  * \ . / .
+   *  --- x ----
+   *  . / . \ .
+   */ 
+  static cr_topLeftCol(col, row) {
+    return HexOddQ.cr_circleNeighbourCol(col, row, 5);
+  }
+  /**
+   *  * \ . / .
+   *  --- x ----
+   *  . / . \ .
+   */ 
+  static cr_topLeftRow(col, row) {
+    return HexOddQ.cr_circleNeighbourRow(col, row, 5);
+  }
 }
 
 /**
