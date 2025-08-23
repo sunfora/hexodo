@@ -18,3 +18,13 @@ export function rem(a, m) {
 export function lerp(start, end, t) {
   return start + t * (end - start);
 }
+
+/**
+ * Return value if it is in the range between min_value and max_value.
+ * @param {number} min_value
+ * @param {number} value
+ * @param {number} max_value
+ */
+export function clamp(min_value, value, max_value) {
+  return Math.min(Math.max(min_value, value), max_value);
+}

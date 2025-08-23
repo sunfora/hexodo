@@ -492,14 +492,11 @@ function array_changed(old_array, new_array) {
   if (new_array.length !== old_array.length) {
     return true;
   }
-  for (const old_elem of old_array) {
+  for (const {hex: hex_old, info: info_old} of old_array) {
     let has = false;
-    for (const new_elem of new_array) {
-      if (
-        new_elem.title === old_elem.title 
-     && new_elem.col === old_elem.col
-     && new_elem.row === old_elem.row 
-      ) {
+    for (const {hex: hex_new, info: info_new} of new_array) {
+      const element_eq = hex_old.equals(hex_new) && info_old.equals(info_new)
+      if (element_eq) {
         has = true;
         break;
       }
@@ -528,11 +525,11 @@ function toggle_list_with_editor() {
 function update_list(elem_list, old_list, new_list) {
   if (array_changed(old_list, new_list)) {
     elem_list.textContent = ""; 
-    for (const elem of new_list) {
+    for (const {hex: hex, info: info} of new_list) {
       const listItem = document.createElement('li');
-      listItem.textContent = elem.title; 
-      listItem.setAttribute('data-col', elem.col);
-      listItem.setAttribute('data-row', elem.row);
+      listItem.textContent = info.title; 
+      listItem.setAttribute('data-col', hex.col);
+      listItem.setAttribute('data-row', hex.row);
       elem_list.appendChild(listItem);
     }
     return true;
@@ -646,8 +643,6 @@ class Chunk {
   /**
    * The size of the chunk in terms of size x size of hexes
    * So currently 16 x 16 = 256
-   *
-   * TODO(ivan): lock this down 
    */
   static SIZE = 16;
 
@@ -984,9 +979,9 @@ class ChunkStorage {
         for (let i = 0; i < chunk.length; ++i) {
           chunk[i] = new HexInfo('dirty');
         }
-        game.storage.set(key, chunk);
+        this.storage.set(key, chunk);
       } else {
-        chunk = game.storage.get(key);
+        chunk = this.storage.get(key);
       }
 
       // set them to be empty 
@@ -1022,7 +1017,7 @@ class ChunkStorage {
    * @returns {HexInfo} - info on given hex
    */
   oddq_getHexInfo(hex, target=null) {
-    return this.getHexInfoColRow(hex.col, hex.row, target);
+    return this.cr_getHexInfo(hex.col, hex.row, target);
   }
 
   cr_hexID(col, row) {
@@ -1063,7 +1058,13 @@ class ChunkStorage {
   }
 
   cr_updateHexInfoStatus(col, row, status) {
-     
+    const chunk = this.cr_refChunk(col, row);
+    const id    = this.cr_hexID(col, row);
+    if (chunk) {
+      chunk[id].status = status;
+    } else {
+      console.error("not loaded"); 
+    }
   }
   
   EMPTY = new HexInfo('dirty')
@@ -1095,7 +1096,7 @@ class ChunkStorage {
    * @param {?HexInfo} target - reuse 
    * @returns {HexInfo} - info on given hex
    */
-  getHexInfoColRow(col, row, target=null) {
+  cr_getHexInfo(col, row, target=null) {
     // set stub if nothing
     const result = HexInfo.recOrNew(target, 'loading');
     // locate chunk
@@ -1110,13 +1111,119 @@ class ChunkStorage {
     return result;
   }
 
-  updateStatus(hex) {
-    
-  }
-
   // TODO(ivan): not finished
   storage = new Map();
   loading = new Map();
+}
+
+/**
+ * struct RGB(r: number, g: number, b: number)
+ */
+class RGB {
+  /**
+   * @param {number} r
+   * @param {number} g
+   * @param {number} b
+   */
+  constructor(r, g, b) {
+    this.r = r;
+    this.g = g;
+    this.b = b;
+  }
+
+  /** 
+   * Reuse the RGB.
+   * NOTE(ivan): unchecked, be sure it really is an object of proper type.
+   * @param {RGB} target 
+   * 
+   * @param {number} r
+   * @param {number} g
+   * @param {number} b
+   */
+  static rec(target, r, g, b) {
+    target.r = r;
+    target.g = g;
+    target.b = b;
+    return target;
+  }
+
+  /** 
+   * Reuse the RGB or new if target is wrong type.
+   * USAGE(ivan): for object pooling and other gc lowerage
+   *
+   * @param {?RGB} target 
+   *
+   * @param {number} r
+   * @param {number} g
+   * @param {number} b
+   */
+  static recOrNew(target, r, g, b) {
+    return target instanceof RGB
+      ? RGB.rec(target, r, g, b)
+      : new RGB(r, g, b);
+  }
+
+  /** 
+   * Compare two objects 
+   * USAGE(ivan): typesafe comparasion 
+   *
+   * @param {?RGB} first
+   * @param {?RGB} second 
+   *
+   * @param {number} r
+   * @param {number} g
+   * @param {number} b
+   */
+  static equals(first, second) {
+    return first  instanceof RGB &&
+           second instanceof RGB &&
+           first.r === second.r &&
+           first.g === second.g &&
+           first.b === second.b
+  }
+
+  /** 
+   * Compares two RGB structs.
+   * @param {RGB} other 
+   */
+  equals(other) {
+    return other instanceof RGB &&
+           this.r === other.r &&
+           this.g === other.g &&
+           this.b === other.b;
+  }
+
+  /** 
+   * Clones RGB.
+   */
+  clone() {
+    const r = this.r;
+    const g = this.g;
+    const b = this.b
+    return new RGB(r, g, b);
+  }
+
+  /** 
+   * Copies contents of this RGB to other
+   * @param {RGB} other
+   */
+  copyTo(other) {
+    const r = this.r;
+    const g = this.g;
+    const b = this.b
+    return RGB.rec(other, r, g, b);
+  }
+
+  static lerp(x, y, t, target=null) {
+    const r = gmath.lerp(x.r, y.r, t)
+    const g = gmath.lerp(x.g, y.g, t)
+    const b = gmath.lerp(x.b, y.b, t)
+    return RGB.recOrNew(target, r, g, b);
+  }
+  
+  get style() {
+    return `rgb(${this.r}, ${this.g}, ${this.b})`;
+  }
 }
 
 /**
@@ -1596,6 +1703,19 @@ class Render {
     return Vec2.recOrNew(target, screen_x, screen_y);
   }
 
+  /**
+   * @param {HexOddQ} hex - hex in oddq coords
+   * @param {number} y - y logical coord
+   * @param {number} plane_z - z logical coord / depth
+   * @param {?Vec2}  target - reuse object
+   *
+   * @returns {Vec2} coordinates on screen
+   */
+  oddq_logicalToScreen(hex, plane_z, target=null) {
+    const vec = oddq_to_vec2(hex, target);
+    return this.xy_logicalToScreen(vec.x, vec.y, plane_z, vec)
+  }
+
   get xCenterScreen() {
     return this.screen.width / 2;
   }
@@ -1619,6 +1739,31 @@ class Render {
 
   static path_hexagon(ctx, size) {
     Render.path_nagon(ctx, 6, size);
+  }
+
+  static xy_path_hexagon(x, y, ctx, size) {
+    Render.xy_path_nagon(x, y, ctx, 6, size);
+  }
+
+  /**
+   * @param {CanvasRenderingContext2D} ctx - context
+   */
+  static xy_path_nagon(x, y, ctx, n, size) {
+    const angle = 2 * Math.PI / n;
+    const side_angle = Math.PI * (n - 2) / (2 * n);
+    const w = Math.cos(side_angle) * size;
+    const h = Math.sin(side_angle) * size;
+    let origin = new Vec2(x - w, y - h);
+    let direct = new Vec2(size, 0);
+    
+    ctx.beginPath()
+    ctx.moveTo(origin.x, origin.y);
+    for (let i = 0; i < n; ++i) {
+      Vec2.add(origin, direct, origin);
+      ctx.lineTo(origin.x, origin.y);
+      direct.rotateBy(angle)
+    }
+    ctx.closePath();
   }
   
   /**
@@ -1652,9 +1797,8 @@ class Render {
       for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
         const text = `${hex.col} ${hex.row}`;
         HexOddQ.rec(hex, col, row);
-        vec = oddq_to_vec2(hex, vec);
-        vec = render.xy_logicalToScreen(vec.x, vec.y, 0, vec);
-        render.screen.ctx.fillText(text, vec.x, vec.y);
+        vec = game.render.oddq_logicalToScreen(hex, 0, vec);
+        game.render.screen.ctx.fillText(text, vec.x, vec.y);
       }
     }
   }
@@ -1810,8 +1954,7 @@ class Render {
     for (let row = bounding_box.minY; row <= bounding_box.maxY; row++) {
       for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
         HexOddQ.rec(hex, col, row);
-        oddq_to_vec2(hex, vec)
-        this.xy_logicalToScreen(vec.x, vec.y, z, vec)
+        this.oddq_logicalToScreen(hex, z, vec);
         this.tile(vec.x, vec.y, z, tile)
         this.pathTile(tile.minX, tile.minY, tile.width, tile.height, this.screen); 
       }
@@ -1821,8 +1964,7 @@ class Render {
 
   outputOutlineScreenToScreen(z, bb) {
     const hex = new HexOddQ(bb.minX - 1, bb.minY - 1);
-    const vec = oddq_to_vec2(hex);
-    const hex_center_screen = this.xy_logicalToScreen(vec.x, vec.y, z)
+    const hex_center_screen = this.oddq_logicalToScreen(hex, z)
     const tile = this.tile(hex_center_screen.x, hex_center_screen.y, z);
 
     const tr2 = this.screen.ctx.getTransform();
@@ -1860,7 +2002,7 @@ class Render {
   })();
 
   /**
-   * draw hexagon with specified color and text using cartesian coordinates
+   * draw hexagon with specified operation
    */
   xy_drawHexagon(x, y, z=0, operation=this.id) {
     const {x: screen_x, y: screen_y} = this.xy_logicalToScreen(x, y, z);
@@ -1890,12 +2032,12 @@ class Render {
 
 const game = new GameState();
 
-const EMPTY    = { r: 255, g: 255, b: 255 }; // white
-const SELECTED = { r: 255, g: 215, b: 0   }; // gold
-const DONE     = { r: 176, g: 196, b: 182 }; // #B0C4B6
-const TODO     = { r: 255, g: 165, b: 0   }; // orange
-const LOCKED   = { r: 175, g: 157, b: 154 }; // #AF9D9A
-const LOADING  = { r: 128, g: 128, b: 128 }; // grey
+const EMPTY    = new RGB(255, 255, 255 ); // white
+const SELECTED = new RGB(255, 215, 0   ); // gold
+const DONE     = new RGB(176, 196, 182 ); // #B0C4B6
+const TODO     = new RGB(255, 165, 0   ); // orange
+const LOCKED   = new RGB(175, 157, 154 ); // #AF9D9A
+const LOADING  = new RGB(128, 128, 128 ); // grey
 
 function status_to_color(status) {
   let calculated_color;
@@ -1922,100 +2064,76 @@ function status_to_color(status) {
   return calculated_color;
 }
 
+
 function draw_grid() {
   let bounding_box = cull_hexes(game.render.camera);
   
 
   const HIGHLIGHT_DURATION = 200;
 
-
-  function lerp_color(start, end, t) {
-    const r = Math.round(gmath.lerp(start.r, end.r, t));
-    const g = Math.round(gmath.lerp(start.g, end.g, t));
-    const b = Math.round(gmath.lerp(start.b, end.b, t));
-    return {r, g, b};
-  }
-
-  function color_to_style(color) {
-    return `rgb(${color.r}, ${color.g}, ${color.b}`;
-  }
-
-  let new_active = [];
-  let new_done = [];
-  let new_locked = [];
+  let by_status = new Map();
   
   let hex = new HexOddQ(0, 0);
   let info = new HexInfo();
 
   // draw color of chunks
-  let last_color;
-  game.render.screen.ctx.save()
   for (let row = bounding_box.minY; row <= bounding_box.maxY; row++) {
     for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
       // reuse hex
       HexOddQ.rec(hex, col, row);
 
-      let status = calculate_color(hex, info);
-      let value = game.storage.oddq_getHexInfo(hex, info);
-
-      if (status === 'done') {
-        new_done.push({...value, ...hex});
-      } else if (status === 'todo') {
-        new_active.push({...value, ...hex});
-      } else if (status === 'locked') {
-        new_locked.push({...value, ...hex});
+      let status = calculate_status(hex, info);
+      game.storage.oddq_getHexInfo(hex, info);
+      if (!by_status.has(status)) {
+        by_status.set(status, []);
       }
-      
-      let calculated_color = status_to_color(status);
-
+      by_status.get(status).push({info: info.clone(), hex: hex.clone()});
+    }
+  }
+  
+  // draw each kind of hexagon
+  for (const status of by_status.keys()) {
+    let calculated_color = status_to_color(status);
+    if (calculated_color !== EMPTY) {
       const ctx  = game.render.screen.ctx;
-      if (calculated_color !== EMPTY) {
-        
-        const vec = oddq_to_vec2(hex);
-        const {x: screen_x, y: screen_y} = game.render.xy_logicalToScreen(vec.x, vec.y, 0);
-
+      ctx.fillStyle = calculated_color.style;
+      for (const {hex: hex} of by_status.get(status)) {
+        const {x: screen_x, y: screen_y} = game.render.oddq_logicalToScreen(hex, 0);
         const size = game.render.hexagonSize(0);
-
-        {
-          ctx.translate(screen_x, screen_y);
-          // create path for hexagon and stroke / fill it
-          Render.path_hexagon(ctx, size);
-          if (!last_color || last_color !== calculated_color) {
-            ctx.fillStyle = color_to_style(calculated_color);
-            last_color = calculate_color;
-          }
-          ctx.fill();
-          ctx.translate(-screen_x, -screen_y);
-        }
+        // create path for hexagon and stroke / fill it
+        Render.xy_path_hexagon(screen_x, screen_y, ctx, size);
+        ctx.fill();
       }
     }
   }
-  game.render.screen.ctx.restore()
-  last_color = null;
 
   // update colors for selected
   {
-    const selected_status = calculate_color(game.selected.hex)
+    const selected_status = calculate_status(game.selected.hex)
     let selected_color = status_to_color(selected_status);
     let nt = Math.abs(Math.sin(Date.now() / 500));
-    selected_color = lerp_color(selected_color, SELECTED, nt);
+    selected_color = RGB.lerp(selected_color, SELECTED, nt);
     game.render.oddq_drawHexagon(game.selected.hex, 0, (ctx) => {
-      ctx.fillStyle = color_to_style(selected_color);
+      ctx.fillStyle = selected_color.style;
       ctx.fill();
     })
   }
   // update colors for underCursor
+  let under_cursor_nt = Math.min(Date.now() - game.underCursor.time, HIGHLIGHT_DURATION) / HIGHLIGHT_DURATION;
+
   {
-    const under_status = calculate_color(game.underCursor.hex)
+    const under_status = calculate_status(game.underCursor.hex)
     let under_color = status_to_color(under_status);
-    let nt = Math.min(Date.now() - game.underCursor.time, HIGHLIGHT_DURATION) / HIGHLIGHT_DURATION;
-    under_color = lerp_color(under_color, SELECTED, nt);
+    under_color = RGB.lerp(under_color, SELECTED, under_cursor_nt);
+
     game.render.oddq_drawHexagon(game.underCursor.hex, 0, (ctx) => {
-      ctx.fillStyle = color_to_style(under_color);
+      ctx.fillStyle = under_color.style;
       ctx.fill();
     })
   }
 
+  game.render.drawOutline(0, bounding_box);
+  
   // draw text
   if (game.camera.z <= 2) {
     const size = game.render.unitPixelScale(0);
@@ -2028,37 +2146,113 @@ function draw_grid() {
       for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
         const text = `${hex.col} ${hex.row}`;
         HexOddQ.rec(hex, col, row);
-        vec = oddq_to_vec2(hex, vec);
-        vec = game.render.xy_logicalToScreen(vec.x, vec.y, 0, vec);
+        vec = game.render.oddq_logicalToScreen(hex, 0, vec);
         game.render.screen.ctx.fillText(text, vec.x, vec.y);
       }
     }
   }
-  game.render.drawOutline(0, bounding_box);
-  update_lists(new_active, new_done, new_locked);
+  
+  function draw_outlined_text(hex, text, font_scale=0.5) {
+    text = text ?? "";
+    // config params I guess 
+    const TEXT_HEIGHT = 0.02;
+    const SECOND_OUTLINE_HEIGHT = 0.4;
+
+    const ctx = game.render.screen.ctx;
+
+    const unit = game.render.unitPixelScale(TEXT_HEIGHT);
+    const font_size = unit * font_scale;
+    const offset_y = - unit * Math.cos(60);
+
+    const white_line_width = unit / 10;
+    const black_line_width = white_line_width * 1.05;
+
+    ctx.font = `${font_size}px Arial`;
+    ctx.fillStyle = 'black';
+    ctx.textAlign = 'center'; // Center the text horizontally
+    ctx.textBaseline = 'middle'; // Center the text vertically
+    game.render.screen.ctx.lineJoin = 'bevel';
+
+    const vec = game.render.oddq_logicalToScreen(hex, TEXT_HEIGHT);
+    vec.y -= offset_y;
+    if (gmath.rem(hex.col, 4) >= 2) {
+      vec.y += offset_y / 2
+    } else {
+    }
+
+
+    // secondary black outline
+    if (game.camera.z <= SECOND_OUTLINE_HEIGHT) {
+      game.render.screen.ctx.strokeStyle = 'black';
+      game.render.screen.ctx.lineWidth = black_line_width;
+      game.render.screen.ctx.strokeText(text, vec.x, vec.y);
+    }
+    
+    // primary white outline
+    game.render.screen.ctx.strokeStyle = 'white';
+    game.render.screen.ctx.lineWidth = white_line_width;
+    game.render.screen.ctx.strokeText(text, vec.x, vec.y);
+
+    // text itself
+    game.render.screen.ctx.fillText(text, vec.x, vec.y);
+  }
+
+  // draw text titles 
+  if (game.camera.z <= 2) {
+    let under_cursor_drawn = false;
+
+    let scale = 0.5;
+    const u_scale = gmath.lerp(scale, scale * 1.15, under_cursor_nt);
+
+    const active_group = by_status.get('todo') ?? [];
+    for (const {hex: hex, info: info} of active_group) {
+      if (game.underCursor.hex.equals(hex)) {
+        draw_outlined_text(hex, info.title, u_scale);
+        under_cursor_drawn = true;
+      } else {
+        draw_outlined_text(hex, info.title, scale);
+      }
+    }
+    if (game.underCursor.hex.equals(game.selected.hex)) {
+      draw_outlined_text(game.selected.hex, game.selected.info.title, u_scale);
+      under_cursor_drawn = true;
+    } else {
+      draw_outlined_text(game.selected.hex, game.selected.info.title, scale);
+    }
+
+    if (!under_cursor_drawn) {
+      draw_outlined_text(game.underCursor.hex, game.underCursor.info.title, u_scale);
+    }
+  }
+ 
+  update_lists(
+    by_status.get('todo') ?? [], 
+    by_status.get('done') ?? [], 
+    by_status.get('locked') ?? []
+  );
 }
 
 /**
  * @param {HexOddQ} hex
  */
-function calculate_color(hex, reuse=null) {
+function calculate_status(hex, reuse=null) {
   const info = game.storage.oddq_getHexInfo(hex, reuse);
 
   if (info.status !== 'loading' && info.status !== 'dirty') {
     return info.status;  
   }
 
-  const current_status    = info.status;
   const current_completed = info.completed;
   const current_is_empty  = info.type === "empty";
 
-  let all_loaded = current_status !== 'loading';
+  let all_loaded = game.storage.cr_hexLoaded(hex.col, hex.row);
   let unlocked = true;
+
   for (let i = 2; i <= 4; ++i) {
     let col = hex.circleNeighbourCol(i)
     let row = hex.circleNeighbourRow(i)
-    game.storage.getHexInfoColRow(col, row, info);
-    all_loaded &&= info.status !== 'loading';
+    game.storage.cr_getHexInfo(col, row, info);
+    all_loaded &&= game.storage.cr_hexLoaded(col, row);
     unlocked   &&= info.type === "empty" || info.completed;
   }
   
@@ -2075,8 +2269,9 @@ function calculate_color(hex, reuse=null) {
       updated_status = 'locked'
     }
   }
-
-  game.storage.cr_updateHexInfoStatus(hex.col, hex.row, updated_status);
+  if (game.storage.cr_hexLoaded(hex.col, hex.row)) {
+    game.storage.cr_updateHexInfoStatus(hex.col, hex.row, updated_status);
+  }
   return updated_status;
 }
 
@@ -2183,7 +2378,7 @@ function wire_dom_events() {
     }
   });
 
-  $(remove_button).addEventListener('click', () => register_event('REQUEST_HEX_REMOVE', {hex: selected.hex}));
+  $(remove_button).addEventListener('click', () => register_event('REQUEST_HEX_REMOVE', {hex: game.selected.hex}));
 
   $(list_view).addEventListener('click', (event) => {
     if (event.target.tagName === 'LI') {
@@ -2276,8 +2471,9 @@ function process_pending_UI_events() {
         let {x: logical_x, y: logical_y} = game.render.xy_clientToLogical(event.clientX, event.clientY, 0);
         let hex = xy_nearest_oddq(logical_x, logical_y)
         if (!(hex.equals(game.underCursor.hex))) {
-          hex.copyTo(game.underCursor.hex);
           game.underCursor.time = Date.now()
+          hex.copyTo(game.underCursor.hex);
+          game.storage.oddq_getHexInfo(game.underCursor.hex, game.underCursor.info)
         }
         register_event('UNDER_CURSOR_CHANGED', {});
         break;
@@ -2347,7 +2543,9 @@ function process_pending_UI_events() {
         break;
       }
       case 'REQUEST_CAMERA_ZOOM': {
-        game.camera.z0UnitScale += event.delta / 3000;
+        const value = game.camera.z0UnitScale;
+        const diff = event.delta / 3000;
+        game.camera.z0UnitScale = gmath.clamp(0.04, value + diff, 4);
         register_event('CAMERA_ZOOMED', {});
         break;
       }
@@ -2381,7 +2579,7 @@ function process_pending_UI_events() {
       case 'HEX_REMOVED': {
         const col = event.hex.col;
         const row = event.hex.row;
-        if (game.storage.hexLoadedColRow(col, row)) {
+        if (game.storage.cr_hexLoaded(col, row)) {
           game.storage.cr_removeCell(col, row);
         }
         form_new_task();

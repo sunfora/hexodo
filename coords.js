@@ -575,6 +575,36 @@ export class Vec2 {
     const y = this.y
     return Vec2.rec(other, x, y);
   }
+  
+  // TODO(ivan): add comment here
+  rotateBy(angle) {
+    const vx = this.x;
+    const vy = this.y;
+
+    const ax = Math.cos(angle);
+    const ay = Math.sin(angle);
+    
+    this.x = vx * ax - vy * ay;
+    this.y = vx * ay + vy * ax;
+  }
+
+  // TODO(ivan): add comment here
+  static rotate(vec, angle, target=null) {
+    const vx = vec.x;
+    const vy = vec.y;
+
+    const ax = Math.cos(angle);
+    const ay = Math.sin(angle);
+    
+    const x = vx * ax - vy * ay;
+    const y = vx * ay + vy * ax;
+    return Vec2.recOrNew(target, x, y); 
+  }
+
+  // TODO(ivan): add comment here
+  static add(a, b, target=null) {
+    Vec2.recOrNew(target, a.x + b.x, a.y + b.y)
+  }
 }
 
 /**
