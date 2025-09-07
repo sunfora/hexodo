@@ -1069,9 +1069,8 @@ class ChunkStorage {
   
   EMPTY = new HexInfo('dirty')
 
-  // TODO add comment
-  cr_removeCell(col, row) {
-    this.cr_updateHexInfo(col, row, this.EMPTY);
+  // TODO(ivan): add comment 
+  cr_markNeighboursDirty(col, row) {
     this.cr_updateHexInfoStatus(
       HexOddQ.cr_topCol(col, row), 
       HexOddQ.cr_topRow(col, row),
@@ -1089,6 +1088,12 @@ class ChunkStorage {
     );
   }
 
+  // TODO add comment
+  cr_removeCell(col, row) {
+    this.cr_updateHexInfo(col, row, this.EMPTY);
+    this.cr_markNeighboursDirty(col, row);
+  }
+
   /**
    * Retrieves hex info from oddq coordinates.
    * @param {number} col - column of hex in oddq coords
@@ -1099,6 +1104,7 @@ class ChunkStorage {
   cr_getHexInfo(col, row, target=null) {
     // set stub if nothing
     const result = HexInfo.recOrNew(target, 'loading');
+    
     // locate chunk
     const chunk = Chunk.fromColRow(col, row);
     const key = `${chunk.col},${chunk.row}`;
@@ -1106,7 +1112,8 @@ class ChunkStorage {
     const hex_id = this.cr_hexID(col, row);
     // copy if there is anything
     if (this.storage.has(key)) {
-      this.storage.get(key)[hex_id].copyTo(result);
+      const in_storage = this.storage.get(key)[hex_id];
+      in_storage.copyTo(result);
     }
     return result;
   }
@@ -2324,8 +2331,16 @@ async function save_selected() {
   if (response.ok) {
     register_event()
     update_form_with_new_data(data);
-    if (game.storage.oddq_hexLoaded(game.selected.hex))  {
+    if (game.storage.oddq_hexLoaded(game.selected.hex)) {
       game.storage.oddq_updateHexInfo(game.selected.hex, game.selected.info);
+      // NOTE(ivan): this is needed because we changed the data 
+      //             and probably the status has changed
+      //             actually I need some method for it
+      //
+      // TODO(ivan): create a method for marking the dirty flags with updates 
+      //             maybe like I have remove_cell somewhere in the codebsase add replace_cell
+      // TODO(ivan): test it
+      game.storage.cr_markNeighboursDirty(game.selected.hex.col, game.selected.hex.row);
     }
   }
 };

@@ -100,6 +100,13 @@ export class HexOddQ {
   static ROW_NEIGHBOURS_ODD   = [-1,  0, 1, 1,  1,  0];
   static ROW_NEIGHBOURS_EVEN  = [-1, -1, 0, 1,  0, -1];
   
+  static cr_isEven(col, row) {
+    return col % 2 === 0;
+  }
+  static cr_isOdd(col, row) {
+    return col % 2 === 0;
+  }
+
   /**
    *  5 \ 0 / 1
    *  --- x ----
@@ -114,7 +121,7 @@ export class HexOddQ {
    *  4 / 3 \ 2
    */ 
   static cr_circleNeighbourRow(col, row, i) {
-    if (col & 1) {
+    if (HexOddQ.cr_isEven(col, row)) {
       return row + HexOddQ.ROW_NEIGHBOURS_EVEN[i];
     } else {
       return row + HexOddQ.ROW_NEIGHBOURS_ODD[i];
