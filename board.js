@@ -2064,7 +2064,6 @@ function status_to_color(status) {
   return calculated_color;
 }
 
-
 function draw_grid() {
   let bounding_box = cull_hexes(game.render.camera);
   
@@ -2082,19 +2081,21 @@ function draw_grid() {
       // reuse hex
       HexOddQ.rec(hex, col, row);
 
-      let status = calculate_status(hex, info);
+      let status = update_status(hex, info);
       game.storage.oddq_getHexInfo(hex, info);
+
       if (!by_status.has(status)) {
         by_status.set(status, []);
       }
       by_status.get(status).push({info: info.clone(), hex: hex.clone()});
     }
   }
-  
+
   // draw each kind of hexagon
   for (const status of by_status.keys()) {
     let calculated_color = status_to_color(status);
-    if (calculated_color !== EMPTY) {
+    /* calculated_color !== EMPTY */
+    if (true) {
       const ctx  = game.render.screen.ctx;
       ctx.fillStyle = calculated_color.style;
       for (const {hex: hex} of by_status.get(status)) {
@@ -2109,7 +2110,7 @@ function draw_grid() {
 
   // update colors for selected
   {
-    const selected_status = calculate_status(game.selected.hex)
+    const selected_status = update_status(game.selected.hex)
     let selected_color = status_to_color(selected_status);
     let nt = Math.abs(Math.sin(Date.now() / 500));
     selected_color = RGB.lerp(selected_color, SELECTED, nt);
@@ -2122,7 +2123,7 @@ function draw_grid() {
   let under_cursor_nt = Math.min(Date.now() - game.underCursor.time, HIGHLIGHT_DURATION) / HIGHLIGHT_DURATION;
 
   {
-    const under_status = calculate_status(game.underCursor.hex)
+    const under_status = update_status(game.underCursor.hex)
     let under_color = status_to_color(under_status);
     under_color = RGB.lerp(under_color, SELECTED, under_cursor_nt);
 
@@ -2235,7 +2236,7 @@ function draw_grid() {
 /**
  * @param {HexOddQ} hex
  */
-function calculate_status(hex, reuse=null) {
+function update_status(hex, reuse=null) {
   const info = game.storage.oddq_getHexInfo(hex, reuse);
 
   if (info.status !== 'loading' && info.status !== 'dirty') {
