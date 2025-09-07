@@ -2144,9 +2144,10 @@ function draw_grid() {
     game.render.screen.ctx.textBaseline = 'middle'; // Center the text vertically
     let vec = null;
     for (let row = bounding_box.minY; row <= bounding_box.maxY; row++) {
-      for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
-        const text = `${hex.col} ${hex.row}`;
+      for (let col = bounding_box.minX; col <= bounding_box.maxX; col++) {
         HexOddQ.rec(hex, col, row);
+
+        const text = `${hex.col} ${hex.row}`;
         vec = game.render.oddq_logicalToScreen(hex, 0, vec);
         game.render.screen.ctx.fillText(text, vec.x, vec.y);
       }
