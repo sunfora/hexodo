@@ -2626,6 +2626,7 @@ function process_pending_UI_events() {
         game.selected.hex = HexOddQ.rec(game.selected.hex, event.hex.col, event.hex.row);
         game.selected.time = Date.now();
         register_event('SELECTED_CHANGED', {});
+        set_rc_to_location(game.selected.hex);
         request_hex(game.selected.hex)
           .then(update_form_with_new_task)
           .catch(console.log);
@@ -2694,11 +2695,39 @@ function game_stop() {
   game.running = false;
 }
 
+function set_rc_to_location(hex) {
+  const url = new URL(window.location);
+  url.searchParams.set('row', hex.row);
+  url.searchParams.set('col', hex.col);
+  history.replaceState(null, '', url.toString());
+}
+
+function set_rc_from_location(hex) {
+  const params = new URLSearchParams(window.location.search);
+  const row = parseInt(params.get('row'), 10);
+  const col = parseInt(params.get('col'), 10);
+  if (!isNaN(row)) {
+    hex.row = row;
+  }
+  if (!isNaN(col)) {
+    hex.col= col;
+  }
+}
+
+function parse_int(param) {
+  if (param === null) {
+    return param;
+  }
+  return parseInt(param);
+}
+
 function game_start() {
   wire_dom_events();
 
   canvas.tabIndex = 0;
   canvas.focus();
+
+  set_rc_from_location(game.underCursor.hex);  
   register_event('HEXAGON_SELECTED', {hex: game.underCursor.hex});
 
   game.running = true;
