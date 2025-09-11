@@ -2638,6 +2638,8 @@ function process_pending_UI_events() {
       case 'HEXAGON_SELECTED': {
         game.selected.hex = HexOddQ.rec(game.selected.hex, event.hex.col, event.hex.row);
         game.selected.time = Date.now();
+        game.storage.oddq_getHexInfo(game.selected.hex, game.selected.info)
+
         register_event('SELECTED_CHANGED', {});
         set_rc_to_location(game.selected.hex);
         request_hex(game.selected.hex)
@@ -2668,8 +2670,8 @@ function loop() {
   }
 
   process_pending_UI_events();
-  draw_animation_frame();
   game.storage.requestAllVisible(cull_hexes(game.camera));
+  draw_animation_frame();
 
   {
     const bb = cull_hexes(game.camera);
