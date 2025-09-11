@@ -2370,10 +2370,12 @@ function wire_dom_events() {
   }
 
   $(canvas).addEventListener('mousedown', (event) => {
+    event.preventDefault();
     if (event.target === event.currentTarget) {
       register_event('GAME_MOUSE_DOWN', {pageX: event.pageX, pageY: event.pageY});
     }
   });
+  $(canvas).addEventListener('contextmenu', (e) => {e.preventDefault();});
   $(canvas).addEventListener('focus',      () => register_event('UI_FOCUSED'      , {target: 'hexgrid'}));
   $(canvas).addEventListener('blur',       () => register_event('UI_BLURRED'      , {target: 'hexgrid'}));
   $(canvas).addEventListener('mouseenter', () => register_event('REQUEST_UI_FOCUS', {target: 'hexgrid'}));
