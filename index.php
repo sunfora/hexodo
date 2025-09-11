@@ -63,7 +63,10 @@ function load_his_tasks() {
       </section>
     </section>
     <form id="task-form">
-        <h2 id="task-form-header">Loading Task...</h2>
+        <div id="task-form-tools"> 
+          <h2 id="task-form-header">Loading Task...</h2>
+          <button id="task-form-copy">#</button>
+        </div>
         <label for="task-title">Task Title:</label>
         <br>
         <input type="text" id="task-title" name="task-title" required>
@@ -294,6 +297,14 @@ function load_footer() {
           border: none;
           font-size: 16px;
           font-family: "Helvetia Neue", Arial, sans-serif;
+        }
+      }
+      #task-form-tools {
+        display: flex;
+        justify-content: space-between; 
+        align-items: center;
+        button {
+          border: none;
         }
       }
       footer {

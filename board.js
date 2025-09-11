@@ -27,6 +27,8 @@ const active_list = document.getElementById('active-list');
 const done_list = document.getElementById('done-list');
 const locked_list = document.getElementById('locked-list');
 
+const task_form_copy_button = document.getElementById('task-form-copy');
+
 const task_form = document.getElementById('task-form');
 const task_title = document.getElementById('task-title');
 const task_description = document.getElementById('task-description');
@@ -2396,6 +2398,15 @@ function wire_dom_events() {
   });
 
   $(remove_button).addEventListener('click', () => register_event('REQUEST_HEX_REMOVE', {hex: game.selected.hex}));
+  $(task_form_copy_button).addEventListener('click', (e) => {
+    e.preventDefault();
+    
+    const title = task_title.value;
+    const description = task_description.value;
+
+    const text = `[${title}]\n${description}`;
+    navigator.clipboard.writeText(text);
+  });
 
   $(list_view).addEventListener('click', (event) => {
     if (event.target.tagName === 'LI') {
