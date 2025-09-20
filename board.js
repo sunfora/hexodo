@@ -2569,19 +2569,76 @@ function process_pending_UI_events() {
         break;
       }
       case 'GAME_KEY_PRESSED': {
-        if (event.key.toLowerCase() === 'm') {
-          game.tool
-          register_event('MOVE_TOOL_ACTIVATED', {});
-        } else if (event.key === 'Escape') {
-          // default
-          register_event('DRAG_TOOL_ACTIVATED', {}); 
+        console.log(event);
+        switch (event.key.toLowerCase()) {
+          case "o": {
+            const col = game.selected.hex.topRightCol;
+            const row = game.selected.hex.topRightRow;
+            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+            break;
+          }
+          case "j": {
+            const col = game.selected.hex.botLeftCol;
+            const row = game.selected.hex.botLeftRow;
+            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+            break;
+          }
+          case "w": {
+            const col = game.selected.hex.topCol;
+            const row = game.selected.hex.topRow;
+            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+            break;
+          }
+          case "e": {
+            const col = game.selected.hex.topRightCol;
+            const row = game.selected.hex.topRightRow;
+            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+            break;
+          }
+          case "q": {
+            const col = game.selected.hex.topLeftCol;
+            const row = game.selected.hex.topLeftRow;
+            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+            break;
+          }
+          case "w": {
+            const col = game.selected.hex.topCol;
+            const row = game.selected.hex.topRow;
+            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+            break;
+          }
+          case "e": {
+            const col = game.selected.hex.topRightCol;
+            const row = game.selected.hex.topRightRow;
+            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+            break;
+          }
+          case "a": {
+            const col = game.selected.hex.botLeftCol;
+            const row = game.selected.hex.botRightRow;
+            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+            break;
+          }
+          case "s": {
+            const col = game.selected.hex.botCol;
+            const row = game.selected.hex.botRow;
+            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+            break;
+          }
+          case "d": {
+            const col = game.selected.hex.botRightCol;
+            const row = game.selected.hex.botRightRow;
+            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+            break;
+          }
+          case "f": {
+            if (game.inventoryIsOpen) {
+              game.inventoryIsOpen = false;
+            } else {
+              game.inventoryIsOpen = true;
+            }
+          }
         }
-        break;
-      }
-      case 'MOVE_TOOL_ACTIVATED': {
-        break;
-      }
-      case 'DRAG_TOOL_ACTIVATED': {
         break;
       }
       case 'REQUEST_HEX_REMOVE_FAILED': {
