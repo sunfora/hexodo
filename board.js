@@ -1779,18 +1779,7 @@ class Render {
    * @param {CanvasRenderingContext2D} ctx - context
    */
   static path_nagon(ctx, n, size) {
-    const turns = n;
-    const angle = 2 * Math.PI / turns;
-
-    ctx.translate(-size * Math.cos(angle), -size * Math.sin(angle));
-    ctx.beginPath()
-    for (let i = 0; i < turns; i += 1) {
-      ctx.lineTo(size, 0);
-      ctx.translate(size, 0);
-      ctx.rotate(angle);
-    }
-    ctx.closePath();
-    ctx.translate(size * Math.cos(angle), size * Math.sin(angle));
+    Render.xy_path_nagon(0, 0, ctx, n, size);
   }
 
   prerenderedChunks = new Map();
@@ -2025,7 +2014,7 @@ class Render {
       ctx.translate(screen_x, screen_y);
       // create path for hexagon and stroke / fill it
       Render.path_hexagon(ctx, size);
-      operation(ctx, unit, size)
+      operation(ctx, unit, size);
     }
     ctx.restore();
   }
