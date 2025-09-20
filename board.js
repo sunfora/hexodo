@@ -1732,6 +1732,10 @@ class Render {
     return this.screen.height / 2;
   }
   
+  unitPixelScaleFromCamera(z) {
+    return this.unitPixelScale(this.camera.z - z);
+  }
+
   /**
    * How big is the scale of unit with respect to scale (screen logical pixels [without dpr])?
    */ 
@@ -2275,6 +2279,120 @@ function update_status(hex, reuse=null) {
   return updated_status;
 }
 
+/**
+ * TODO(ivan): add comment
+ */
+function xy_measure_card(x, y, bb) {
+  const card_height = game.render.unitPixelScaleFromCamera(0) * 5;
+  const card_width  = card_height * 5 / 7;
+  return BoundingBox.recOrNew(bb, x, x + card_width, y, y + card_height);
+}
+
+/**
+ * TODO(ivan): add comment
+ */
+function xy_measure_hex(x, y, size, bb) {
+  return BoundingBox.recOrNew(bb, x, x + 2 * size, y, y + size * Math.sqrt(3));
+}
+
+/**
+ *
+ */
+function br_xy_measure_hex(x, y, size, bb) {
+  return BoundingBox.recOrNew(bb, x - 2 * size, x, y - size * Math.sqrt(3), y);
+}
+
+function xy_draw_card(x, y) {
+  const dim = xy_measure_card(x, y);
+  const card_height = dim.height;
+  const card_width  = dim.width;
+  const card_round = 5;
+
+  game.render.screen.ctx.beginPath();
+  game.render.screen.ctx.roundRect(x, y, card_width, card_height, card_round);
+  game.render.screen.ctx.fillStyle = "white";
+  game.render.screen.ctx.fill();
+  
+  const hexagon_size    = card_height * 1 / 18;
+  const hexagon_padding = card_height / 24;
+
+  const hexdim = xy_measure_hex(
+    dim.minX + hexagon_padding, 
+    dim.minY + hexagon_padding, 
+    hexagon_size
+  );
+    
+  Render.xy_path_hexagon(
+    hexdim.centerX, hexdim.centerY,
+    game.render.screen.ctx,
+    hexagon_size
+  );
+  game.render.screen.ctx.fillStyle = "orange";
+  game.render.screen.ctx.fill();
+
+  br_xy_measure_hex(
+    dim.maxX - hexagon_padding, 
+    dim.maxY - hexagon_padding, 
+    hexagon_size,
+    hexdim
+  );
+
+  Render.xy_path_hexagon(
+    hexdim.centerX, hexdim.centerY,
+    game.render.screen.ctx,
+    hexagon_size
+  );
+  game.render.screen.ctx.fillStyle = "orange";
+  game.render.screen.ctx.fill();
+}
+
+function draw_inventory() {
+  const inventory_x = game.render.screen.width * 0.1;
+  const inventory_y = game.render.screen.height * 0.1;
+  const inventory_height = game.render.screen.height * 0.8;
+  const inventory_width = game.render.screen.width * 0.8;
+
+  const inventory_padding = 20;
+
+  game.render.screen.ctx.fillRect(inventory_x, inventory_y, inventory_width, inventory_height);
+  const card_bb = xy_measure_card(inventory_x + inventory_padding, inventory_y + inventory_padding);
+  const font_size = inventory_padding * 8/10;
+
+
+  const init_gap_x = inventory_padding;
+  const gap_y = inventory_padding * 2;
+
+  const space = (inventory_width - 2 * inventory_padding);
+  const cards_in_one_row = Math.floor(space / (init_gap_x + card_bb.width));
+  const cards_rows = 10;
+  
+  const gap_x = (inventory_width - (card_bb.width * cards_in_one_row)) / (cards_in_one_row + 1);
+
+  const window_into = new BoundingBox(
+    inventory_x + init_gap_x, inventory_x + inventory_width - init_gap_x,
+    inventory_y + init_gap_x, inventory_y + inventory_height - init_gap_x
+  );
+  
+  game.render.screen.ctx.save();
+  game.render.screen.ctx.beginPath();
+  game.render.screen.ctx.rect(window_into.minX, window_into.minY, window_into.width, window_into.height);
+  game.render.screen.ctx.clip();
+
+  for (let j = 0; j < cards_rows; ++j) {
+    for (let i = 0; i < cards_in_one_row; ++i) {
+      const start_x = inventory_x + gap_x + (card_bb.width + gap_x) * i;
+      const start_y = card_bb.minY + (gap_y + card_bb.height) * j;
+      xy_draw_card(start_x, start_y);
+      game.render.screen.ctx.font = `${font_size}px Arial`;
+      game.render.screen.ctx.fillStyle = "white";
+      game.render.screen.ctx.textAlign = 'center'; // Center the text horizontally
+      game.render.screen.ctx.textBaseline = 'middle'; // Center the text vertically
+      game.render.screen.ctx.fillText(`test_card ${j}, ${i}`, start_x + card_bb.width / 2, start_y + card_bb.height + gap_y / 2);
+    }
+  }
+  game.render.screen.ctx.restore();
+}
+
 function draw_animation_frame() {
 
   // update camera fovX, fovY automatically
@@ -2282,6 +2400,9 @@ function draw_animation_frame() {
   game.render.screen.clear();
   game.render.cameraToScreen();
   game.camera.withFreeze(draw_grid);
+  if (game.inventoryIsOpen) {
+    draw_inventory();
+  }
 }
 
 let canvasFrame = null;
