@@ -584,7 +584,7 @@ async function request_cell_remove(which) {
 }
 
 function stub_task() {
-  return new HexInfo('dirty', null, 'task', 'New task', false, 'description');
+  return new HexInfo('dirty', null, 'task', '', false, '');
 }
 
 function form_new_task() {
@@ -2422,6 +2422,8 @@ function swap_event_buffers() {
 }
 
 
+// TODO(ivan): reread and find if I already have done save_hex ???
+//             why not???!!!
 async function save_selected() {
   const form_data = new URLSearchParams();
 
@@ -2502,6 +2504,10 @@ function wire_dom_events() {
     if (event.repeat) {
         return;
     }
+    console.log(event);
+    if (event.key === "Escape") {
+      register_event("REQUEST_UI_FOCUS", {target: 'hexgrid'});
+    }
     if (event.target === canvas) {
       register_event('GAME_KEY_PRESSED', {
         key: event.key
@@ -2529,7 +2535,34 @@ function wire_dom_events() {
       register_event('LIST_ITEM_SELECTED', {hex: {col, row}});
     }
   });
+  
+  // NOTE(ivan): ugly hack
+  // TODO(ivan): remove this trash
+  // why? I need to save the things when input happens but I need to wait a little so...
+  let time_when_user_typed = 0;
+  let hex = new HexOddQ(0, 0);
+  let input_happened = false;
+  const INPUT_UPDATE_THRESHOLD = 300;
+  function sync_current_selected() {
+    const now = Date.now();
+    if (!hex.equals(game.selected.hex)) {
+      time_when_user_typed = now;
+      game.selected.hex.copyTo(hex);
+    } else if (now - time_when_user_typed > INPUT_UPDATE_THRESHOLD) {
+      if (input_happened) {
+        register_event('EDITOR_CHANGED', {})
+        input_happened = false;
+      }
+      time_when_user_typed = now;
+    } else {
+      time_when_user_typed = now;
+    }
+  }
 
+  setInterval(sync_current_selected, INPUT_UPDATE_THRESHOLD);
+
+  $(description).addEventListener('input', () => {input_happened = true; sync_current_selected() });
+  $(title).addEventListener('input', () => {input_happened = true; sync_current_selected() });
   $(task_form).addEventListener('change', () => register_event('EDITOR_CHANGED', {}));
   $(task_form).addEventListener('submit', (event) => {
     event.preventDefault(); 
@@ -2555,7 +2588,6 @@ function process_pending_UI_events() {
   for (const e of UI_event_frame) {
     const type = e.type;
     const event = e.data;
-    //console.log(type);
     switch (type) {
       case 'REQUEST_SAVE_SELECTED': {
         save_selected().then( () => {
@@ -2641,6 +2673,9 @@ function process_pending_UI_events() {
         if (event.target === 'hexgrid') {
           canvas.focus();
         }        
+        if (event.target === 'description') {
+          description.focus();
+        }
         break;
       }
       case 'REQUEST_UI_BLUR': {
@@ -2690,8 +2725,11 @@ function process_pending_UI_events() {
         break;
       }
       case 'GAME_KEY_PRESSED': {
-        console.log(event);
         switch (event.key.toLowerCase()) {
+          case "c": {
+            register_event('REQUEST_UI_FOCUS', {target: 'description'}); 
+            break;
+          }
           case "o": {
             const col = game.selected.hex.topRightCol;
             const row = game.selected.hex.topRightRow;
@@ -2758,6 +2796,12 @@ function process_pending_UI_events() {
             } else {
               game.inventoryIsOpen = true;
             }
+            break;
+          }
+          case " ": {
+            game.selected.info.completed = !game.selected.info.completed;
+            register_event("REQUEST_SAVE_SELECTED", {});
+            break;
           }
         }
         break;
@@ -2788,6 +2832,7 @@ function process_pending_UI_events() {
       case 'EDITOR_CHANGED': {
         update_selected();
         register_event('SELECTED_CHANGED', {});
+        register_event('REQUEST_SAVE_SELECTED', {});
         break;
       }
       case 'SELECTED_CHANGED': {

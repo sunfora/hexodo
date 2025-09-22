@@ -69,11 +69,11 @@ function load_his_tasks() {
         </div>
         <label for="task-title">Task Title:</label>
         <br>
-        <input type="text" id="task-title" name="task-title" required>
+        <input type="text" id="task-title" name="task-title" placeholder="New task" required>
         <br>
         <label for="task-description">Task Description:</label>
         <br>
-        <textarea id="task-description" name="task-description" rows="8"></textarea>
+        <textarea id="task-description" name="task-description" placeholder="description" rows="8"></textarea>
         <input id="task-completed" name="task-completed" type="checkbox"/>
 
         <br>
