@@ -443,6 +443,37 @@ class Camera {
   }
 }
 
+class Inventory {
+  // TODO(ivan): add documentation
+  MAX_SIZE = 256;
+  // TODO(ivan): add documentation
+  items = [];
+  // TODO(ivan): add documentation
+  isLoaded = false;
+  // TODO(ivan): add documentation
+  isOpen = false;
+  // TODO(ivan): add documentation
+  scroll = 0.0;
+  
+  // TODO(ivan): add documentation
+  async load() {
+    for (let i = 0; i < 100; ++i) {
+      const info = new HexInfo("todo", 100500 + i, "task", `test {i}`, `description {i}`);
+      this.items.push(info);
+    }
+    this.isLoaded = true;
+  }
+
+  // TODO(ivan): add documentation
+  toggle() {
+    if (this.isOpen) {
+      this.isOpen = false;
+    } else {
+      this.isOpen = true;
+    }
+  }
+}
+
 /**
  * NOTE(ivan): 
  * > I had a game object
@@ -460,11 +491,13 @@ class GameState {
   running;
   tool;
   domEventsController;
+  inventory;
 
   constructor() {
     this.camera = new Camera();
     this.render = new Render(this.camera, new ScreenDPR(window.devicePixelRatio, canvas));
     this.storage = new ChunkStorage();
+    this.inventory = new Inventory();
 
     this.selected = {
       hex: new HexOddQ(0, 0),
@@ -2302,6 +2335,18 @@ function br_xy_measure_hex(x, y, size, bb) {
   return BoundingBox.recOrNew(bb, x - 2 * size, x, y - size * Math.sqrt(3), y);
 }
 
+function xy_draw_empty_slot(x, y) {
+  const dim = xy_measure_card(x, y);
+  const card_height = dim.height;
+  const card_width  = dim.width;
+  const card_round = 5;
+
+  game.render.screen.ctx.beginPath();
+  game.render.screen.ctx.roundRect(x, y, card_width, card_height, card_round);
+  game.render.screen.ctx.fillStyle = "grey";
+  game.render.screen.ctx.fill();
+}
+
 function xy_draw_card(x, y) {
   const dim = xy_measure_card(x, y);
   const card_height = dim.height;
@@ -2347,6 +2392,8 @@ function xy_draw_card(x, y) {
 }
 
 function draw_inventory() {
+  const total_slots = game.inventory.MAX_SIZE;
+
   const inventory_x = game.render.screen.width * 0.1;
   const inventory_y = game.render.screen.height * 0.1;
   const inventory_height = game.render.screen.height * 0.8;
@@ -2382,12 +2429,13 @@ function draw_inventory() {
     for (let i = 0; i < cards_in_one_row; ++i) {
       const start_x = inventory_x + gap_x + (card_bb.width + gap_x) * i;
       const start_y = card_bb.minY + (gap_y + card_bb.height) * j;
-      xy_draw_card(start_x, start_y);
-      game.render.screen.ctx.font = `${font_size}px Arial`;
-      game.render.screen.ctx.fillStyle = "white";
-      game.render.screen.ctx.textAlign = 'center'; // Center the text horizontally
-      game.render.screen.ctx.textBaseline = 'middle'; // Center the text vertically
-      game.render.screen.ctx.fillText(`test_card ${j}, ${i}`, start_x + card_bb.width / 2, start_y + card_bb.height + gap_y / 2);
+      xy_draw_empty_slot(start_x, start_y);
+      // xy_draw_card(start_x, start_y);
+      // game.render.screen.ctx.font = `${font_size}px Arial`;
+      // game.render.screen.ctx.fillStyle = "white";
+      // game.render.screen.ctx.textAlign = 'center'; // Center the text horizontally
+      // game.render.screen.ctx.textBaseline = 'middle'; // Center the text vertically
+      // game.render.screen.ctx.fillText(`test_card ${j}, ${i}`, start_x + card_bb.width / 2, start_y + card_bb.height + gap_y / 2);
     }
   }
   game.render.screen.ctx.restore();
@@ -2400,7 +2448,7 @@ function draw_animation_frame() {
   game.render.screen.clear();
   game.render.cameraToScreen();
   game.camera.withFreeze(draw_grid);
-  if (game.inventoryIsOpen) {
+  if (game.inventory.isOpen) {
     draw_inventory();
   }
 }
@@ -2791,11 +2839,7 @@ function process_pending_UI_events() {
             break;
           }
           case "f": {
-            if (game.inventoryIsOpen) {
-              game.inventoryIsOpen = false;
-            } else {
-              game.inventoryIsOpen = true;
-            }
+            game.inventory.toggle();
             break;
           }
           case " ": {
@@ -2956,6 +3000,8 @@ function game_start() {
 
   set_rc_from_location(game.underCursor.hex);  
   register_event('HEXAGON_SELECTED', {hex: game.underCursor.hex});
+  
+  game.inventory.load();
 
   game.running = true;
   requestAnimationFrame(loop);
