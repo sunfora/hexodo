@@ -2335,6 +2335,19 @@ function br_xy_measure_hex(x, y, size, bb) {
   return BoundingBox.recOrNew(bb, x - 2 * size, x, y - size * Math.sqrt(3), y);
 }
 
+function xy_draw_slot_selection(x, y) {
+  const dim = xy_measure_card(x, y);
+  const card_height = dim.height;
+  const card_width  = dim.width;
+  const card_round = 5;
+
+  game.render.screen.ctx.beginPath();
+  game.render.screen.ctx.roundRect(x, y, card_width, card_height, card_round);
+  game.render.screen.ctx.strokeStyle = "gold";
+  game.render.screen.ctx.lineWidth = 4;
+  game.render.screen.ctx.stroke();
+}
+
 function xy_draw_empty_slot(x, y) {
   const dim = xy_measure_card(x, y);
   const card_height = dim.height;
@@ -2393,6 +2406,7 @@ function xy_draw_card(x, y) {
 
 function draw_inventory() {
   const total_slots = game.inventory.MAX_SIZE;
+  const current_slot = Math.round(game.inventory.scroll * total_slots);
 
   const inventory_x = game.render.screen.width * 0.1;
   const inventory_y = game.render.screen.height * 0.1;
@@ -2424,18 +2438,22 @@ function draw_inventory() {
   game.render.screen.ctx.beginPath();
   game.render.screen.ctx.rect(window_into.minX, window_into.minY, window_into.width, window_into.height);
   game.render.screen.ctx.clip();
-
+  
   for (let j = 0; j < cards_rows; ++j) {
     for (let i = 0; i < cards_in_one_row; ++i) {
+      const slot_drawn = j * cards_in_one_row + i;
       const start_x = inventory_x + gap_x + (card_bb.width + gap_x) * i;
       const start_y = card_bb.minY + (gap_y + card_bb.height) * j;
       xy_draw_empty_slot(start_x, start_y);
-      // xy_draw_card(start_x, start_y);
-      // game.render.screen.ctx.font = `${font_size}px Arial`;
-      // game.render.screen.ctx.fillStyle = "white";
-      // game.render.screen.ctx.textAlign = 'center'; // Center the text horizontally
-      // game.render.screen.ctx.textBaseline = 'middle'; // Center the text vertically
-      // game.render.screen.ctx.fillText(`test_card ${j}, ${i}`, start_x + card_bb.width / 2, start_y + card_bb.height + gap_y / 2);
+      xy_draw_card(start_x, start_y);
+      game.render.screen.ctx.font = `${font_size}px Arial`;
+      game.render.screen.ctx.fillStyle = "white";
+      game.render.screen.ctx.textAlign = 'center'; // Center the text horizontally
+      game.render.screen.ctx.textBaseline = 'middle'; // Center the text vertically
+      game.render.screen.ctx.fillText(`test_card ${j}, ${i}`, start_x + card_bb.width / 2, start_y + card_bb.height + gap_y / 2);
+      if (slot_drawn === current_slot) {
+        xy_draw_slot_selection(start_x, start_y);
+      }
     }
   }
   game.render.screen.ctx.restore();
