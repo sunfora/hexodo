@@ -14,6 +14,7 @@ import {
 } from "./coords.js";
 
 import * as gmath from "./gmath.js"
+import "./components/debug-slider.js"
 
 const board_id = window.appConfig.board.board_id;
 const user_name = window.appConfig.user_id;
@@ -515,6 +516,13 @@ class GameState {
   }
 }
 
+function inspect_slider(object, property) {
+  const slider = document.createElement("debug-slider");
+  document.body.append(slider);
+  slider.addEventListener("input", e => {
+    object[property] = slider.value;
+  });
+}
 
 let done = [];
 let locked = [];
