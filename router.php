@@ -95,6 +95,14 @@ if (preg_match('#^/api/card/(\d+)$#', $requestUri, $matches)) {
     exit;
 }
 
+if (preg_match('#^/components/(.*)\.js$#', $requestUri, $matches)) {
+    require_method(["GET"]);
+    $dir = dirname($requestUri);
+    $component = $matches[1];
+    require ".$dir/$component/.serve.php";
+    exit;
+}
+
 // If no route matches, serve the requested file if it exists,
 // otherwise return a 404.
 $filePath = __DIR__ . $requestUri;
