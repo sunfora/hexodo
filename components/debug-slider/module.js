@@ -1,10 +1,6 @@
 class DebugSlider extends HTMLElement {
   errors = [];
   value = 0;
-  x = 0;
-  y = 0;
-  beforeX = 0;
-  beforeY = 0;
   clientX = 0;
   clientY = 0;
 
@@ -38,9 +34,6 @@ class DebugSlider extends HTMLElement {
 
     move_nav.addEventListener("mousedown", e => {
       this.dragged = true;
-      const {x: bx, y: by} = body.getBoundingClientRect();
-      this.beforeX = bx;
-      this.beforeY = by;
       this.clientX = e.clientX;
       this.clientY = e.clientY;
     });
@@ -48,15 +41,22 @@ class DebugSlider extends HTMLElement {
     document.addEventListener("mouseup", e => {
       if (this.dragged) {
         this.dragged = false;
+        
+        requestAnimationFrame(() => {
+          const {top: btop, left: bleft} = body.getBoundingClientRect();
+          body.style.top  = `${btop}px`;
+          body.style.left = `${bleft}px`;
+          body.style.transform = "none";
+        })
       }
     });
 
     document.addEventListener("mousemove", e => {
       if (this.dragged) {
-        this.x = this.beforeX + e.clientX - this.clientX;
-        this.y = this.beforeY + e.clientY - this.clientY;
-        body.style.top =  `${this.y}px`;
-        body.style.left = `${this.x}px`;
+        const diffX = e.clientX - this.clientX;
+        const diffY = e.clientY - this.clientY;
+        const transform =  `translate(${diffX}px, ${diffY}px)`;
+        body.style.transform = transform;
       }
     });
 
