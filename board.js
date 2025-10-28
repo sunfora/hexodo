@@ -446,7 +446,9 @@ class Camera {
 
 class Inventory {
   // TODO(ivan): add documentation
-  MAX_SIZE = 256;
+  padding = 20;
+  // TODO(ivan): add documentation
+  size = 256;
   // TODO(ivan): add documentation
   items = [];
   // TODO(ivan): add documentation
@@ -471,6 +473,48 @@ class Inventory {
       this.isOpen = false;
     } else {
       this.isOpen = true;
+    }
+  }
+  
+  countRowSize() {
+
+  }
+
+  scrollColumn(k) {
+    this.currentCard += k;
+  }
+ 
+  get currentCard() {
+    if (this.scroll === 1) {
+      return this.size - 1;
+    } else {
+      return Math.floor(this.scroll * this.size);
+    }
+  }
+
+  set currentCard(k) {
+    this.scroll = gmath.clamp(0, k, this.size - 1) / this.size;
+  }
+
+  scrollRow(k) {
+    const x = game.render.screen.width * 0.1;
+    const y = game.render.screen.height * 0.1;
+    const inventory_height = game.render.screen.height * 0.8;
+    const inventory_width = game.render.screen.width * 0.8;
+    const padding = this.padding;
+
+    const card_bb = xy_measure_card(x + padding, y + padding);
+    const font_size = padding * 8/10;
+
+    const init_gap_x = padding;
+    const gap_y = padding * 2;
+
+    const space = (inventory_width - 2 * padding);
+    const cards_in_one_row = Math.floor(space / (init_gap_x + card_bb.width));
+    const current = this.currentCard;
+    const after = current + k * cards_in_one_row;
+    if (0 <= after && after < this.size) {
+      this.currentCard += k * cards_in_one_row;
     }
   }
 }
@@ -2269,7 +2313,7 @@ function draw_grid() {
       draw_outlined_text(game.underCursor.hex, game.underCursor.info.title, u_scale);
     }
   }
- 
+
   update_lists(
     by_status.get('todo') ?? [], 
     by_status.get('done') ?? [], 
@@ -2413,16 +2457,18 @@ function xy_draw_card(x, y) {
 }
 
 function draw_inventory() {
-  const total_slots = game.inventory.MAX_SIZE;
-  const current_slot = Math.round(game.inventory.scroll * total_slots);
+  const total_slots = game.inventory.size;
+
+  const current_slot = game.inventory.currentCard;
 
   const inventory_x = game.render.screen.width * 0.1;
   const inventory_y = game.render.screen.height * 0.1;
   const inventory_height = game.render.screen.height * 0.8;
   const inventory_width = game.render.screen.width * 0.8;
 
-  const inventory_padding = 20;
-
+  const inventory_padding = game.inventory.padding;
+  
+  game.render.screen.ctx.fillStyle = 'black';
   game.render.screen.ctx.fillRect(inventory_x, inventory_y, inventory_width, inventory_height);
   const card_bb = xy_measure_card(inventory_x + inventory_padding, inventory_y + inventory_padding);
   const font_size = inventory_padding * 8/10;
@@ -2433,36 +2479,66 @@ function draw_inventory() {
 
   const space = (inventory_width - 2 * inventory_padding);
   const cards_in_one_row = Math.floor(space / (init_gap_x + card_bb.width));
-  const cards_rows = 10;
-  
+  const total_number_of_rows = Math.ceil(total_slots / cards_in_one_row);
   const gap_x = (inventory_width - (card_bb.width * cards_in_one_row)) / (cards_in_one_row + 1);
 
   const window_into = new BoundingBox(
     inventory_x + init_gap_x, inventory_x + inventory_width - init_gap_x,
     inventory_y + init_gap_x, inventory_y + inventory_height - init_gap_x
   );
+
+  const row_y_size = gap_y + card_bb.height;
+  const current_row = Math.floor(current_slot / cards_in_one_row);
+  const rows_in_one_page = Math.round(window_into.height / row_y_size);
+
+  const page_start = current_row - (current_row % rows_in_one_page);
+  const page_end = page_start + rows_in_one_page;
   
   game.render.screen.ctx.save();
   game.render.screen.ctx.beginPath();
   game.render.screen.ctx.rect(window_into.minX, window_into.minY, window_into.width, window_into.height);
   game.render.screen.ctx.clip();
-  
-  for (let j = 0; j < cards_rows; ++j) {
+
+  for (let j = 0; j < total_number_of_rows; ++j) {
+
+    const row_to_draw = j;
+    const within_page = page_start <= row_to_draw && row_to_draw < page_end;
+    game.render.screen.ctx.save();
+    if (!within_page) {
+      game.render.screen.ctx.globalCompositeOperation = 'luminosity';
+    }
+
     for (let i = 0; i < cards_in_one_row; ++i) {
+      
       const slot_drawn = j * cards_in_one_row + i;
-      const start_x = inventory_x + gap_x + (card_bb.width + gap_x) * i;
-      const start_y = card_bb.minY + (gap_y + card_bb.height) * j;
-      xy_draw_empty_slot(start_x, start_y);
-      xy_draw_card(start_x, start_y);
-      game.render.screen.ctx.font = `${font_size}px Arial`;
-      game.render.screen.ctx.fillStyle = "white";
-      game.render.screen.ctx.textAlign = 'center'; // Center the text horizontally
-      game.render.screen.ctx.textBaseline = 'middle'; // Center the text vertically
-      game.render.screen.ctx.fillText(`test_card ${j}, ${i}`, start_x + card_bb.width / 2, start_y + card_bb.height + gap_y / 2);
-      if (slot_drawn === current_slot) {
-        xy_draw_slot_selection(start_x, start_y);
+      const is_current = slot_drawn === current_slot;
+
+
+      let start_x = inventory_x + gap_x + (card_bb.width + gap_x) * i;
+      let start_y = card_bb.minY + (row_y_size) * (j - page_start);
+      const is_fully_visible = (start_y + row_y_size) <= window_into.maxY;
+      if (is_current && j != page_start && is_fully_visible) {
+        start_y -= row_y_size / 8;
+      } else if (is_current && j != page_start) {
+        start_y = window_into.maxY - row_y_size;
+      } else if (is_current) {
+        start_y += row_y_size / 32;
+      }
+
+      if (slot_drawn < total_slots) {
+        xy_draw_empty_slot(start_x, start_y);
+        xy_draw_card(start_x, start_y);
+        game.render.screen.ctx.font = `${font_size}px Arial`;
+        game.render.screen.ctx.fillStyle = "white";
+        game.render.screen.ctx.textAlign = 'center'; // Center the text horizontally
+        game.render.screen.ctx.textBaseline = 'middle'; // Center the text vertically
+        game.render.screen.ctx.fillText(`test_card ${slot_drawn}`, start_x + card_bb.width / 2, start_y + card_bb.height + gap_y / 2);
+        if (is_current) {
+          xy_draw_slot_selection(start_x, start_y);
+        }
       }
     }
+    game.render.screen.ctx.restore();
   }
   game.render.screen.ctx.restore();
 }
@@ -2575,14 +2651,16 @@ function wire_dom_events() {
 
   $(document).addEventListener('mouseup', (event) => register_event('MOUSE_UP', event));
   $(document).addEventListener('keydown', (event) => {
-    if (event.repeat) {
-        return;
-    }
-    console.log(event);
+
     if (event.key === "Escape") {
+      event.preventDefault();
+      if (event.repeat) {
+          return;
+      }
       register_event("REQUEST_UI_FOCUS", {target: 'hexgrid'});
     }
-    if (event.target === canvas) {
+    if (event.target === canvas && event.key !== 'F5') {
+      event.preventDefault();
       register_event('GAME_KEY_PRESSED', {
         key: event.key
       });
@@ -2799,79 +2877,95 @@ function process_pending_UI_events() {
         break;
       }
       case 'GAME_KEY_PRESSED': {
-        switch (event.key.toLowerCase()) {
-          case "c": {
-            register_event('REQUEST_UI_FOCUS', {target: 'description'}); 
-            break;
+        if (event.key === 'f') {
+          game.inventory.toggle();
+        }
+        if (game.inventory.isOpen) {
+          switch (event.key) {
+            case "ArrowLeft": {
+              game.inventory.scrollColumn(-1);
+            }break;
+            case "ArrowRight": {
+              game.inventory.scrollColumn(1);
+            }break;
+            case "ArrowUp": {
+              game.inventory.scrollRow(-1);
+            }break;
+            case "ArrowDown": {
+              game.inventory.scrollRow(1);
+            }break;
           }
-          case "o": {
-            const col = game.selected.hex.topRightCol;
-            const row = game.selected.hex.topRightRow;
-            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
-            break;
-          }
-          case "j": {
-            const col = game.selected.hex.botLeftCol;
-            const row = game.selected.hex.botLeftRow;
-            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
-            break;
-          }
-          case "w": {
-            const col = game.selected.hex.topCol;
-            const row = game.selected.hex.topRow;
-            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
-            break;
-          }
-          case "e": {
-            const col = game.selected.hex.topRightCol;
-            const row = game.selected.hex.topRightRow;
-            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
-            break;
-          }
-          case "q": {
-            const col = game.selected.hex.topLeftCol;
-            const row = game.selected.hex.topLeftRow;
-            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
-            break;
-          }
-          case "w": {
-            const col = game.selected.hex.topCol;
-            const row = game.selected.hex.topRow;
-            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
-            break;
-          }
-          case "e": {
-            const col = game.selected.hex.topRightCol;
-            const row = game.selected.hex.topRightRow;
-            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
-            break;
-          }
-          case "a": {
-            const col = game.selected.hex.botLeftCol;
-            const row = game.selected.hex.botRightRow;
-            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
-            break;
-          }
-          case "s": {
-            const col = game.selected.hex.botCol;
-            const row = game.selected.hex.botRow;
-            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
-            break;
-          }
-          case "d": {
-            const col = game.selected.hex.botRightCol;
-            const row = game.selected.hex.botRightRow;
-            register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
-            break;
-          }
-          case "f": {
-            game.inventory.toggle();
-            break;
-          }
-          case " ": {
-            game.selected.info.completed = !game.selected.info.completed;
-            register_event("REQUEST_SAVE_SELECTED", {});
-            break;
+        } else {
+          switch (event.key.toLowerCase()) {
+            case "c": {
+              register_event('REQUEST_UI_FOCUS', {target: 'description'}); 
+              break;
+            }
+            case "o": {
+              const col = game.selected.hex.topRightCol;
+              const row = game.selected.hex.topRightRow;
+              register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+              break;
+            }
+            case "j": {
+              const col = game.selected.hex.botLeftCol;
+              const row = game.selected.hex.botLeftRow;
+              register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+              break;
+            }
+            case "w": {
+              const col = game.selected.hex.topCol;
+              const row = game.selected.hex.topRow;
+              register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+              break;
+            }
+            case "e": {
+              const col = game.selected.hex.topRightCol;
+              const row = game.selected.hex.topRightRow;
+              register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+              break;
+            }
+            case "q": {
+              const col = game.selected.hex.topLeftCol;
+              const row = game.selected.hex.topLeftRow;
+              register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+              break;
+            }
+            case "w": {
+              const col = game.selected.hex.topCol;
+              const row = game.selected.hex.topRow;
+              register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+              break;
+            }
+            case "e": {
+              const col = game.selected.hex.topRightCol;
+              const row = game.selected.hex.topRightRow;
+              register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+              break;
+            }
+            case "a": {
+              const col = game.selected.hex.botLeftCol;
+              const row = game.selected.hex.botRightRow;
+              register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+              break;
+            }
+            case "s": {
+              const col = game.selected.hex.botCol;
+              const row = game.selected.hex.botRow;
+              register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+              break;
+            }
+            case "d": {
+              const col = game.selected.hex.botRightCol;
+              const row = game.selected.hex.botRightRow;
+              register_event('HEXAGON_SELECTED', {hex: new HexOddQ(col, row)}); 
+              break;
+            }
+            case " ": {
+              game.selected.info.completed = !game.selected.info.completed;
+              register_event("REQUEST_SAVE_SELECTED", {});
+              break;
+            }
           }
         }
         break;
