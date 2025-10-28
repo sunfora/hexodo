@@ -1590,9 +1590,9 @@ class ScreenDPR {
   swapctx;
 
 
-  constructor(dpr=window.devicePixelRatio, canvas=document.createElement('canvas')) {
+  constructor(dpr=window.devicePixelRatio, canvas=new OffscreenCanvas(300, 150)) {
     this.device = canvas;
-    this.swap = document.createElement('canvas');
+    this.swap = new OffscreenCanvas(300, 150);
     this.swapctx = this.swap.getContext('2d');
 
     this.#dpr = dpr;
@@ -2075,7 +2075,7 @@ class Render {
     const visible = (bounding_box.maxY - bounding_box.minY + 1)
                   * (bounding_box.maxX - bounding_box.minX + 1);
   
-    reuse &= (z === lastZ && cameraZ === this.camera.z && !this.screenChanged);
+    reuse &&= (z === lastZ && cameraZ === this.camera.z && !this.screenChanged);
     cameraZ = this.camera.z;
     lastZ = z;
                  
