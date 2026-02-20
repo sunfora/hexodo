@@ -28,21 +28,109 @@ const active_list = document.getElementById('active-list');
 const done_list = document.getElementById('done-list');
 const locked_list = document.getElementById('locked-list');
 
-const task_form_copy_button = document.getElementById('task-form-copy');
-
-const task_form = document.getElementById('task-form');
-const task_title = document.getElementById('task-title');
-const task_description = document.getElementById('task-description');
 
 const remove_button = document.getElementById('remove-button');
 
 const canvas = document.getElementById('hex-grid');
 const cam_debug = document.getElementById('cam-debug');
 
-const title = document.querySelector('#task-title');
-const description = document.querySelector('#task-description');
-const header = document.querySelector('#task-form-header');
-const completed = document.querySelector('#task-completed');
+
+class TaskWidget {
+  /**
+   * @type {HTMLFormElement}
+   */
+  e_form;
+  /**
+   * @type {HTMLButtonElement}
+   */
+  e_clipboard_copy;
+  /**
+   * @type {HTMLInputElement}
+   */
+  e_title;
+  /**
+   * @type {HTMLInputElement}
+   */
+  e_description;
+  /**
+   * @type {HTMLInputElement}
+   */
+  e_completed;
+
+  /**
+   * @type {HTMLHeadingElement}
+   */
+  e_header;
+
+  /**
+   * @param {HTMLElement} form
+   */
+  constructor(form) {
+    this.e_form = form;
+    this.e_clipboard_copy = form.querySelector('#task-form-copy');
+    this.e_title = form.querySelector('#task-title');
+    this.e_description = form.querySelector('#task-description');
+    this.e_completed = form.querySelector('#task-completed');
+    this.e_header = form.querySelector('#task-form-header');
+  }
+  
+  async copy_to_clipboard() {
+     const title = this.title;
+     const description = this.description;
+     const text = `[${title}]\n${description}`;
+
+     await navigator.clipboard.writeText(text);
+  }
+
+  get title () {
+    return this.e_title.value;
+  }
+  set title (value) {
+    this.e_title.value = value;
+  }
+
+  get description () {
+    return this.e_description.value;
+  }
+  set description (value) {
+    this.e_description.value = value; 
+  }
+
+  get completed () {
+    return this.e_completed.checked;
+  }
+  set completed (value) {
+    this.e_completed.checked = value;
+  }
+
+  get header () {
+    return this.e_header.textContent;
+  }
+  set header (value) {
+    this.e_header.textContent = value;
+  }
+
+  /**
+   * @param {HexInfo} info
+   */
+  read(info) {
+    this.title       = info.title;
+    this.description = info.description;
+    this.completed   = info.completed;
+  }
+
+  /**
+   * @param {HexInfo} info
+   */
+  write(info) {
+    info.title       = this.title;
+    info.description = this.description;
+    info.completed   = this.completed;
+  }
+} 
+
+const task_widget = new TaskWidget(document.getElementById('task-form'));
+
 
 /**
  * struct HexInfo(
@@ -597,12 +685,12 @@ function array_changed(old_array, new_array) {
 
 function toggle_list_with_editor() {
   if (list_view.hasAttribute('hidden')) {
-    task_form.setAttribute('hidden', '');
+    task_widget.e_form.setAttribute('hidden', '');
     list_view.removeAttribute('hidden');
     toggle_list_view.textContent = 'edit selected';
     return 'list-view';
   } else {
-    task_form.removeAttribute('hidden');
+    task_widget.e_form.removeAttribute('hidden');
     list_view.setAttribute('hidden', '');
     toggle_list_view.textContent = 'list view';
     return 'editor';
@@ -639,25 +727,10 @@ function update_lists(new_active, new_done, new_locked) {
   }
 }
 
-function update_active_list(new_list) {
-  if (array_changed(active, new_list)) {
-    active_list.textContent = "";
-  }
-}
-
 function update_form(header_message) {
-  title.value        = game.selected.info.title;
-  description.value  = game.selected.info.description;
-  completed.checked  = game.selected.info.completed;
-  header.textContent = header_message;
+  task_widget.read(game.selected.info);
+  task_widget.header = header_message;
 }
-
-function update_selected() {
-  game.selected.info.title       = title.value;
-  game.selected.info.description = description.value;
-  game.selected.info.completed   = completed.checked;
-}
-
 
 async function request_cell_remove(which) {
   const response = await fetch(`api/boards/${board_id}/cells?row=${which.row}&col=${which.col}`, {
@@ -2668,14 +2741,11 @@ function wire_dom_events() {
   });
 
   $(remove_button).addEventListener('click', () => register_event('REQUEST_HEX_REMOVE', {hex: game.selected.hex}));
-  $(task_form_copy_button).addEventListener('click', (e) => {
-    e.preventDefault();
-    
-    const title = task_title.value;
-    const description = task_description.value;
 
-    const text = `[${title}]\n${description}`;
-    navigator.clipboard.writeText(text);
+
+  $(task_widget.e_clipboard_copy).addEventListener('click', async (event) => {
+    event.preventDefault();
+    await task_widget.copy_to_clipboard();
   });
 
   $(list_view).addEventListener('click', (event) => {
@@ -2713,10 +2783,10 @@ function wire_dom_events() {
 
   setInterval(sync_current_selected, INPUT_UPDATE_THRESHOLD);
 
-  $(description).addEventListener('input', () => {input_happened = true; sync_current_selected() });
-  $(title).addEventListener('input', () => {input_happened = true; sync_current_selected() });
-  $(task_form).addEventListener('change', () => register_event('EDITOR_CHANGED', {}));
-  $(task_form).addEventListener('submit', (event) => {
+  $(task_widget.e_description).addEventListener('input', () => {input_happened = true; sync_current_selected() });
+  $(task_widget.e_title).addEventListener('input', () => {input_happened = true; sync_current_selected() });
+  $(task_widget.e_form).addEventListener('change', () => register_event('EDITOR_CHANGED', {}));
+  $(task_widget.e_form).addEventListener('submit', (event) => {
     event.preventDefault(); 
     register_event('REQUEST_SAVE_SELECTED', {});
   });
@@ -2826,7 +2896,7 @@ function process_pending_UI_events() {
           canvas.focus();
         }        
         if (event.target === 'description') {
-          description.focus();
+          task_widget.e_description.focus();
         }
         break;
       }
@@ -2994,7 +3064,7 @@ function process_pending_UI_events() {
         break;
       }
       case 'EDITOR_CHANGED': {
-        update_selected();
+        task_widget.write(game.selected.info);
         register_event('SELECTED_CHANGED', {});
         register_event('REQUEST_SAVE_SELECTED', {});
         break;
