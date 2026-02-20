@@ -38,7 +38,8 @@ $board = load_board();
 
 $config = [
   'board' => $board,
-  'user_id' => Session::read('username', 'anon')
+  'user_id' => Session::read('username', 'anon'),
+  'dev' => true
 ];
 
 function load_his_tasks() {

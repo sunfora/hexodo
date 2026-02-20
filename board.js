@@ -3197,4 +3197,12 @@ function game_start() {
   requestAnimationFrame(loop);
 }
 
+function expose_module_variables() {
+  globalThis.task_widget = task_widget;
+}
+
+if (appConfig.dev) {
+  expose_module_variables();
+}
+
 game_start();
