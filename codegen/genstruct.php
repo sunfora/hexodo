@@ -169,7 +169,7 @@ try {
         $field = $f['name'];
         if ($f['optional'] || $f['default'] !== null) {
             $defaultVal = $f['default'] ?? 'undefined';
-            $ctorBody .= "    this.$field = $field === undefined ? $defaultVal : $field;\n";
+            $ctorBody .= "    this.$field = ($field === undefined)? $defaultVal : $field;\n";
         } else {
             $ctorBody .= "    this.$field = $field;\n";
         }

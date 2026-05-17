@@ -11,9 +11,9 @@ import {
   HexOddQ,
   Vec2,
   Vec3
-} from "./coords.js";
+} from "./modules/coords.js";
 
-import * as gmath from "./gmath.js"
+import * as gmath from "./modules/gmath.js"
 import "./components/debug-slider.js"
 
 const board_id = window.appConfig.board.board_id;
@@ -132,15 +132,16 @@ class TaskWidget {
 const task_widget = new TaskWidget(document.getElementById('task-form'));
 
 
+
 /**
  * struct HexInfo(
- *    status?: string = "loading", 
- *    id?: number = null,
- *    type?: string = "empty", 
- *    title?: string = null, 
- *    completed?: boolean = false, 
- *    description?: string = null
- * ) 
+ *   status?: string = "loading", 
+ *   id?: number = null,
+ *   type?: string = "empty", 
+ *   title?: string = null, 
+ *   completed?: boolean = false, 
+ *   description?: string = null
+ * )
  */
 class HexInfo {
   /**
@@ -152,12 +153,12 @@ class HexInfo {
    * @param {string=} description
    */
   constructor(status, id, type, title, completed, description) {
-    this.status = status === undefined ? "loading" : status;
-    this.id = id === undefined ? null : id;
-    this.type = type === undefined ? "empty" : type;
-    this.title = title === undefined ? null : title;
-    this.completed = completed === undefined ? false : completed;
-    this.description = description === undefined ? null : description;
+    this.status = (status === undefined)? "loading" : status;
+    this.id = (id === undefined)? null : id;
+    this.type = (type === undefined)? "empty" : type;
+    this.title = (title === undefined)? null : title;
+    this.completed = (completed === undefined)? false : completed;
+    this.description = (description === undefined)? null : description;
   }
 
   /** 
@@ -1394,84 +1395,6 @@ class RGB {
 }
 
 /**
- * Simple lightweight utility class for managing object pools.
- * Usage: mostly to reuse events and other objects.
- *
- * NOTE(ivan): why not a class which I would then new Pool() blah blah blah.
- *             Well... this thing is a flat thing specifically for EventBus.
- *             And it is kinda simple stupid and good for cache.
- *
- * DONE(ivan): Step through this in a debugger
- */
-export class FixedPool {
-  /**
-   * Note(ivan): return from this queue if something is removed
-   */ 
-  static pool = [];
-
-  /**
-   * Registers new fixed pool. Returns id to use.
-   */
-  static register(size) {
-    const pool = FixedPool.pool;
-    pool.push(size);
-    const id = pool.length - 1;
-    for (let i = 0; i <= size; ++i) {
-      pool.push(null);
-    }
-    return id;
-  }
-
-  /**
-   * Push object to a dedicated pool, returns boolean on sucess (if pool is not overflown).
-   */
-  static reuse(id, object) {
-    const pool = FixedPool.pool;
-    const free_id = id;
-    const free = FixedPool.free(id);
-    const top = FixedPool.top(id);
-    if (free > 0) {
-      pool[free_id]--;
-      pool[top - 1] = object;
-    } else {
-      console.error("FixedPool: pool overflow");
-    }
-  }
-
-  static top(id) {
-    return (id + 1) + FixedPool.free(id);
-  }
-
-  static free(id) {
-    const pool = FixedPool.pool;
-    return pool[id];
-  }
-
-  /**
-   * Get an object from pool or null if nothing is there.
-   */
-  static object(id) {
-    const pool = FixedPool.pool;
-    const free_id = id;
-    const free = FixedPool.free(id);
-    const top = FixedPool.top(id);
-    
-    // take the object
-    const object = pool[top];
-    pool[top] = null;
-
-    if (object !== null) {
-      // increase free slots count
-      pool[free_id]++;
-    } else {
-      console.error("FixedPool: pool underflow");
-    }
-
-    return object;
-  }
-}
-
-/**
  * struct BoundingBox(minX: number, maxX: number, minY: number, maxY: number)
  */
 class BoundingBox {
@@ -2192,30 +2115,44 @@ class Render {
 
 const game = new GameState();
 
-const EMPTY    = new RGB(255, 255, 255 ); // white
-const SELECTED = new RGB(255, 215, 0   ); // gold
-const DONE     = new RGB(176, 196, 182 ); // #B0C4B6
-const TODO     = new RGB(255, 165, 0   ); // orange
-const LOCKED   = new RGB(175, 157, 154 ); // #AF9D9A
-const LOADING  = new RGB(128, 128, 128 ); // grey
+const Color = {
+  Status : {
+    EMPTY    : new RGB(255, 255, 255 ), // white
+    DONE     : new RGB(176, 196, 182 ), // #b0c4b6
+    TODO     : new RGB(255, 165, 0   ), // orange
+    LOCKED   : new RGB(175, 157, 154 ), // #AF9D9A
+    LOADING  : new RGB(128, 128, 128 ), // grey
+    CANCELED : new RGB(219, 58,  44  ), // #db3a2c
+  },
+  SELECTED : new RGB(255, 215, 0   ), // gold
+}
 
-function status_to_color(status) {
+/**
+ * Converts status -> RGB.
+ *
+ * @param {string} status
+ * @returns {RGB} color 
+ */
+function color_from_status(status) {
   let calculated_color;
   switch (status) {
     case 'done':
-      calculated_color = DONE;
-      break;
-    case 'empty':
-      calculated_color = EMPTY;
-      break;
-    case 'todo':
-      calculated_color = TODO;
-      break;
-    case 'locked':
-      calculated_color = LOCKED;
-      break;
-    case 'loading':
-      calculated_color = LOADING;
+      calculated_color = Color.Status.DONE;
+      break;                          
+    case 'empty':                     
+      calculated_color = Color.Status.EMPTY;
+      break;                          
+    case 'todo':                      
+      calculated_color = Color.Status.TODO;
+      break;                          
+    case 'locked':                    
+      calculated_color = Color.Status.LOCKED;
+      break;                          
+    case 'loading':                   
+      calculated_color = Color.Status.LOADING;
+      break;                          
+    case 'canceled':                  
+      calculated_color = Color.Status.CANCELED;
       break;
     default:
       debugger;
@@ -2253,7 +2190,7 @@ function draw_grid() {
 
   // draw each kind of hexagon
   for (const status of by_status.keys()) {
-    let calculated_color = status_to_color(status);
+    let calculated_color = color_from_status(status);
     /* calculated_color !== EMPTY */
     if (true) {
       const ctx  = game.render.screen.ctx;
@@ -2271,21 +2208,22 @@ function draw_grid() {
   // update colors for selected
   {
     const selected_status = update_status(game.selected.hex)
-    let selected_color = status_to_color(selected_status);
+    let selected_color = color_from_status(selected_status);
     let nt = Math.abs(Math.sin(Date.now() / 500));
-    selected_color = RGB.lerp(selected_color, SELECTED, nt);
+    selected_color = RGB.lerp(selected_color, Color.SELECTED, nt);
     game.render.oddq_drawHexagon(game.selected.hex, 0, (ctx) => {
       ctx.fillStyle = selected_color.style;
       ctx.fill();
     })
   }
+
   // update colors for underCursor
   let under_cursor_nt = Math.min(Date.now() - game.underCursor.time, HIGHLIGHT_DURATION) / HIGHLIGHT_DURATION;
 
   {
     const under_status = update_status(game.underCursor.hex)
-    let under_color = status_to_color(under_status);
-    under_color = RGB.lerp(under_color, SELECTED, under_cursor_nt);
+    let under_color = color_from_status(under_status);
+    under_color = RGB.lerp(under_color, Color.SELECTED, under_cursor_nt);
 
     game.render.oddq_drawHexagon(game.underCursor.hex, 0, (ctx) => {
       ctx.fillStyle = under_color.style;
