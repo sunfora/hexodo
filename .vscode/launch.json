@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "bashdb",
+      "request": "launch",
+      "name": "Bash: Use My Terminal",
+      "program": "${workspaceFolder}/env/project.sh", 
+      "stopOnEntry": false,
+      "terminalDevice": "/dev/pts/2", 
+      "args": ["-i"]
+    }
+  ]
+}
