@@ -1,0 +1,22 @@
+[
+  {
+    "name"  : "task",
+    "states": ["todo", "done", "later", "canceled"]
+  },
+  {
+    "name"  : "and",
+    "states": ["idle", "active"]
+  },
+  {
+    "name"  : "or",
+    "states": ["idle", "active"]
+  },
+  {
+    "name"  : "note",
+    "states": ["empty", "written"]
+  },
+  {
+    "name"   : "teleport",
+    "states" : ["empty", "tethered"]
+  }
+]
