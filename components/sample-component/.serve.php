@@ -30,7 +30,7 @@ if ($url_path === "/" || $url_path === "/index.html") {
   http_response_code(404);
   die;
 } else if (basename($url_path) === ($component_config['name'] . ".js")) {
-  header('Content-Type: application/javascript');
+  header('Content-Type: application/javascript; charset=utf-8');
 
   $stylesheet_path = __DIR__ . "/{$component_config['style']}";
   $html_template_path = __DIR__ . "/{$component_config['template']}";
