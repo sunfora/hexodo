@@ -47,7 +47,9 @@ if ($requestUri === '/api/login') {
 
 if ($requestUri === '/api/boards') {
   require_method(["POST"]);
-  require 'api/create_board.php';
+  if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require 'api/create_board.php';
+  }
   exit;
 }
 
@@ -79,14 +81,6 @@ if (preg_match('#^/api/boards/(\d+)/chunks$#', $requestUri, $matches)) {
 }
 
 // tasks
-if (preg_match('#^/api/card/(\d+)$#', $requestUri, $matches)) {
-    // Extract the task_id
-    require_method(["GET"]);
-    $_GET['task_id'] = (int) $matches[1];
-    require 'api/card.php';
-    exit;
-}
-
 if (preg_match('#^/components/(.*)\.js$#', $requestUri, $matches)) {
     require_method(["GET"]);
     $dir = dirname($requestUri);
@@ -104,7 +98,7 @@ if (file_exists($filePath) && is_file($filePath)) {
   require_method(["GET"]);
   if (str_ends_with($filePath, ".php")) {
     ?>
-      <h1><?= htmlspecialchars($filePath) ?> </h1>
+      <h1><?= htmlspecialchars($filePath) ?></h1>
       <pre><code><?= htmlspecialchars(file_get_contents($filePath), ENT_HTML5, 'UTF-8');?></code></pre>
     <?
     die;

@@ -78,11 +78,11 @@ function make_login_form() {
         exit;
       }
     ?>
-        <p>
-          Account: <? echo Session::read('username'); ?>
-        </p>
-        <form action="api/logout" method="post">
-            <button type="submit">Logout</button>
-        </form>
+    <p>
+      Account: <? echo Session::read('username'); ?>
+    </p>
+    <form action="api/logout" method="post">
+        <button type="submit">Logout</button>
+    </form>
   </body>
 </html>
