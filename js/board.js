@@ -14,7 +14,13 @@ import {
 } from "./modules/coords.js";
 
 import * as gmath from "./modules/gmath.js"
-import "./components/debug-slider.js"
+
+
+
+// NOTE(ivan) dynamic debug imports 
+if (appConfig.dev) {
+  import("../components/debug-slider.js");
+}
 
 const board_id = window.appConfig.board.board_id;
 const user_name = window.appConfig.user_id;
@@ -2117,14 +2123,14 @@ const game = new GameState();
 
 const Color = {
   Status : {
+    LOADING  : new RGB(128, 128, 128 ), // grey
     EMPTY    : new RGB(255, 255, 255 ), // white
     DONE     : new RGB(176, 196, 182 ), // #b0c4b6
     TODO     : new RGB(255, 165, 0   ), // orange
     LOCKED   : new RGB(175, 157, 154 ), // #AF9D9A
-    LOADING  : new RGB(128, 128, 128 ), // grey
     CANCELED : new RGB(219, 58,  44  ), // #db3a2c
   },
-  SELECTED : new RGB(255, 215, 0   ), // gold
+  SELECTED : new RGB(255, 215, 0   ),   // gold
 }
 
 /**
@@ -2136,6 +2142,9 @@ const Color = {
 function color_from_status(status) {
   let calculated_color;
   switch (status) {
+    case 'loading':                   
+      calculated_color = Color.Status.LOADING;
+      break;                          
     case 'done':
       calculated_color = Color.Status.DONE;
       break;                          
@@ -2147,9 +2156,6 @@ function color_from_status(status) {
       break;                          
     case 'locked':                    
       calculated_color = Color.Status.LOCKED;
-      break;                          
-    case 'loading':                   
-      calculated_color = Color.Status.LOADING;
       break;                          
     case 'canceled':                  
       calculated_color = Color.Status.CANCELED;
@@ -3136,7 +3142,9 @@ function game_start() {
 }
 
 function expose_module_variables() {
+  globalThis.game = game;
   globalThis.task_widget = task_widget;
+  globalThis.inspect_slider = inspect_slider;
 }
 
 if (appConfig.dev) {
