@@ -17,7 +17,7 @@ const CHUNK_SIZE = 16;
 try {
   $select_cards = $db->prepare(
     <<<SQL
-      SELECT c.cell_row, c.cell_col, c.task_id, t.task_completed, t.task_title 
+      SELECT c.cell_row, c.cell_col, t.*
       FROM 
         cells AS c 
       LEFT JOIN 
@@ -41,11 +41,6 @@ try {
   ]);
 
   $cards = $select_cards->fetchAll(PDO::FETCH_ASSOC);
-  foreach ($cards as &$card) {
-    $card['task_completed'] = (bool) $card['task_completed'];
-  }
-  unset($card);
-
   http_response_code(200);
   echo json_encode($cards);
 } catch (\PDOException $e) {

@@ -1,2 +1,4 @@
 # do not list database files
 *.db
+vendor
+server.log

@@ -1,0 +1,9 @@
+{
+    "php.version": "8.1",
+    "composer.enable": true,
+    "indexer.enabled_watchers": [
+        "inotify",
+        "find",
+        "php"
+    ]
+}
