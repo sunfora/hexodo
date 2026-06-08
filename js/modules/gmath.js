@@ -5,7 +5,18 @@
  * @returns {number} - remainder of division
  */
 export function rem(a, m) {
-  return ((a % m) + m) % m;
+  const r = a % m;
+  return (r < 0)? r + m : r;
+}
+
+/**
+ * Get mathematical remainder. a = r mod b, where b > r >= 0
+ * @param {number} a - the number to divide
+ * @param {number} m - the modulo === 2^p
+ * @returns {number} - remainder of division
+ */
+export function rem_power_base2(a, m) {
+  return a & (m - 1);
 }
 
 /**

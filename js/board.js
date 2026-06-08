@@ -137,8 +137,6 @@ class TaskWidget {
 
 const task_widget = new TaskWidget(document.getElementById('task-form'));
 
-
-
 /**
  * struct HexInfo(
  *   status?: string = "loading", 
@@ -500,9 +498,9 @@ class Camera {
       this.swapTransform.x = this.transform.x;
       this.swapTransform.y = this.transform.y;
       this.swapTransform.z = this.transform.z
-      this.swapPosition.x = this.position.x;
-      this.swapPosition.y = this.position.y;
-      this.swapPosition.z = this.position.z
+      this.swapPosition.x  = this.position.x;
+      this.swapPosition.y  = this.position.y;
+      this.swapPosition.z  = this.position.z
       this.swap();
     } else {
       console.error("attempt to freeze camera while freezed");
@@ -812,6 +810,8 @@ class Chunk {
    * So currently 16 x 16 = 256
    */
   static SIZE = 16;
+  static INNER_ADDRESS_BITS = 4;
+  static ADDRESS_BITS = 22;
 
   /**
    * @param {number} col
@@ -932,8 +932,8 @@ class Chunk {
    * @param {?Chunk} - reuse
    * @returns {?Chunk} - chunk which contains hex
    */
-  static fromHexOddQ(hex, target=null) {
-    return Chunk.fromColRow(hex.col, hex.row, target);
+  static oddq_from(hex, target=null) {
+    return Chunk.cr_from(hex.col, hex.row, target);
   }
 
   /**
@@ -944,20 +944,28 @@ class Chunk {
    * @param {?Chunk} - reuse
    * @returns {?Chunk} - chunk which contains hex
    */
-  static fromColRow(col, row, target=null) {
-    col = Chunk.colHexCol(col);
-    row = Chunk.rowHexRow(row);
+  static cr_from(col, row, target=null) {
+    col = Chunk.c_hex_r_from(col);
+    row = Chunk.r_hex_r_from(row);
     return Chunk.recOrNew(target, col, row);
   }
 
   // TODO(ivan): add comment
-  static colHexCol(col) {
+  static c_hex_r_from(col) {
     return Math.floor(col / Chunk.SIZE);
   }
 
   // TODO(ivan): add comment
-  static rowHexRow(row) {
+  static r_hex_r_from(row) {
     return Math.floor(row / Chunk.SIZE);
+  }
+
+  // TODO(ivan): add comment
+  static id_hex_cr_from(col, row) {
+    const in_hex_col = gmath.rem_power_base2(col, Chunk.SIZE);
+    const in_hex_row = gmath.rem_power_base2(row, Chunk.SIZE);
+    const hex_id = in_hex_row * Chunk.SIZE + in_hex_col;
+    return hex_id;
   }
 }
 
@@ -1061,15 +1069,15 @@ class ChunkStorage {
     const maxX = bounding_box.maxX + 1;
     const maxY = bounding_box.maxY + 1;
 
-    const minChunkX = Chunk.colHexCol(minX);
-    const maxChunkX = Chunk.colHexCol(maxX);
-    const minChunkY = Chunk.rowHexRow(minY);
-    const maxChunkY = Chunk.rowHexRow(maxY);
+    const minChunkX = Chunk.c_hex_r_from(minX);
+    const maxChunkX = Chunk.c_hex_r_from(maxX);
+    const minChunkY = Chunk.r_hex_r_from(minY);
+    const maxChunkY = Chunk.r_hex_r_from(maxY);
 
     for (let col = minChunkX; col <= maxChunkX; ++col) {
       for (let row = minChunkY; row <= maxChunkY; ++row) {
-        if (!this.isLoaded(col, row) && !this.isLoading(col, row)) {
-          this.requestChunk(col, row)
+        if (!this.chunk_cr_isLoaded(col, row) && !this.chunk_cr_isLoading(col, row)) {
+          this.chunk_cr_requestChunk(col, row)
         }
       }
     }
@@ -1094,8 +1102,16 @@ class ChunkStorage {
   /**
    * Checks is chunk loaded?
    */
-  isLoaded(col, row) {
-    const key = `${col},${row}`;
+  chunk_cr_isLoaded(col, row) {
+    const key = this.chunk_cr_FastChunkKey(col, row);
+    const storage = this.storage;
+    return storage.has(key);
+  }
+  /**
+   * Checks is hex loaded?
+   */
+  hex_cr_isLoaded(col, row) {
+    const key = this.hex_cr_FastChunkKey(col, row);
     const storage = this.storage;
     return storage.has(key);
   }
@@ -1103,8 +1119,8 @@ class ChunkStorage {
   /**
    * Checks is chunk loading?
    */
-  isLoading(col, row) {
-    const key = `${col},${row}`;
+  chunk_cr_isLoading(col, row) {
+    const key = this.chunk_cr_FastChunkKey(col, row);
     const loading = this.loading;
     return loading.has(key);
   }
@@ -1113,8 +1129,8 @@ class ChunkStorage {
    * Send request to the server for a chunk, write it to storage.
    * @returns {Response} - the result of operation
    */
-  async requestChunk(col, row) {
-    const key = `${col},${row}`;
+  async chunk_cr_requestChunk(col, row) {
+    const key = this.chunk_cr_FastChunkKey(col, row);
 
     const loading = this.loading;
     const storage = this.storage;
@@ -1141,7 +1157,7 @@ class ChunkStorage {
       
       /**  @type {HexInfo[]} chunk */
       let chunk;
-      if (!this.isLoaded(col, row)) {
+      if (!this.chunk_cr_isLoaded(col, row)) {
         chunk = new Array(Chunk.SIZE * Chunk.SIZE).fill(null);
         for (let i = 0; i < chunk.length; ++i) {
           chunk[i] = new HexInfo('dirty');
@@ -1155,11 +1171,11 @@ class ChunkStorage {
       chunk.forEach(info => HexInfo.rec(info, 'dirty'));
       // set values
       for (const point of points) {
-        const point_id = this.cr_hexID(point.cell_col, point.cell_row);
-        chunk[point_id].type = 'task';
-        chunk[point_id].id = point.task_id;
+        const point_id            = Chunk.id_hex_cr_from(point.cell_col, point.cell_row);
+        chunk[point_id].type      = 'task';
+        chunk[point_id].id        = point.task_id;
         chunk[point_id].completed = point.task_completed;
-        chunk[point_id].title = point.task_title;
+        chunk[point_id].title     = point.task_title;
       }
       return response;
     } finally {
@@ -1187,27 +1203,16 @@ class ChunkStorage {
     return this.cr_getHexInfo(hex.col, hex.row, target);
   }
 
-  cr_hexID(col, row) {
-    const in_hex_col = gmath.rem(col, Chunk.SIZE);
-    const in_hex_row = gmath.rem(row, Chunk.SIZE);
-    const hex_id = in_hex_row * Chunk.SIZE + in_hex_col;
-    return hex_id;
-  }
-
   cr_refChunk(col, row) {
-    const chunk = Chunk.fromColRow(col, row);
-    const key = `${chunk.col},${chunk.row}`;
+    const key = this.hex_cr_FastChunkKey(col, row);
     return this.storage.get(key);
   }
   
-  oddq_hexLoaded(hex) {
-    const chunk = Chunk.fromHexOddQ(hex);
-    return this.isLoaded(chunk.col, chunk.row);   
-  }
-
-  cr_hexLoaded(col, row) {
-    const chunk = Chunk.fromColRow(col, row);
-    return this.isLoaded(chunk.col, chunk.row);   
+  /**
+   * @param {HexOddQ} hex
+   */
+  oddq_hex_isLoaded(hex) {
+    return this.hex_cr_isLoaded(hex.col, hex.row);
   }
 
   oddq_updateHexInfo(hex, info) {
@@ -1216,8 +1221,8 @@ class ChunkStorage {
 
   cr_updateHexInfo(col, row, info) {
     const chunk = this.cr_refChunk(col, row);
-    const id    = this.cr_hexID(col, row);
     if (chunk) {
+      const id  = Chunk.id_hex_cr_from(col, row);
       info.copyTo(chunk[id]);
     } else {
       console.error("not loaded"); 
@@ -1226,8 +1231,8 @@ class ChunkStorage {
 
   cr_updateHexInfoStatus(col, row, status) {
     const chunk = this.cr_refChunk(col, row);
-    const id    = this.cr_hexID(col, row);
     if (chunk) {
+      const id  = Chunk.id_hex_cr_from(col, row);
       chunk[id].status = status;
     } else {
       console.error("not loaded"); 
@@ -1261,6 +1266,27 @@ class ChunkStorage {
     this.cr_markNeighboursDirty(col, row);
   }
 
+  chunk_cr_FastChunkKey(col, row) {
+    const abs_max_negative = 1 << (Chunk.ADDRESS_BITS - 1);
+    
+    const unsigned_col = col + abs_max_negative;
+    const unsigned_row = row + abs_max_negative;
+
+    return unsigned_col * (1 << Chunk.ADDRESS_BITS) + unsigned_row;
+  }
+
+  hex_cr_FastChunkKey(hex_col, hex_row) {
+    const col = hex_col >> Chunk.INNER_ADDRESS_BITS;
+    const row = hex_row >> Chunk.INNER_ADDRESS_BITS;
+
+    const abs_max_negative = 1 << (Chunk.ADDRESS_BITS - 1);
+    
+    const unsigned_col = col + abs_max_negative;
+    const unsigned_row = row + abs_max_negative;
+
+    return unsigned_col * (1 << Chunk.ADDRESS_BITS) + unsigned_row;
+  }
+
   /**
    * Retrieves hex info from oddq coordinates.
    * @param {number} col - column of hex in oddq coords
@@ -1273,12 +1299,12 @@ class ChunkStorage {
     const result = HexInfo.recOrNew(target, 'loading');
     
     // locate chunk
-    const chunk = Chunk.fromColRow(col, row);
-    const key = `${chunk.col},${chunk.row}`;
-    // find the id of hex in array
-    const hex_id = this.cr_hexID(col, row);
+    const key = this.hex_cr_FastChunkKey(col, row);
+
     // copy if there is anything
     if (this.storage.has(key)) {
+      // find the id of hex in array
+      const hex_id = Chunk.id_hex_cr_from(col, row);
       const in_storage = this.storage.get(key)[hex_id];
       in_storage.copyTo(result);
     }
@@ -1873,24 +1899,7 @@ class Render {
     Render.xy_path_nagon(0, 0, ctx, n, size);
   }
 
-  prerenderedChunks = new Map();
-
-  /**
-   * 
-   */
-  drawChunkText(col, row, z) {
-    const key = `${col},${row}`;
-    
-    let vec = null;
-    for (let row = bounding_box.minY; row <= bounding_box.maxY; row++) {
-      for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
-        const text = `${hex.col} ${hex.row}`;
-        HexOddQ.rec(hex, col, row);
-        vec = game.render.oddq_logicalToScreen(hex, 0, vec);
-        game.render.screen.ctx.fillText(text, vec.x, vec.y);
-      }
-    }
-  }
+  textures = new Map();
 
   /**
    * @type {ScreenDPR} outlineBuffer;
@@ -1980,8 +1989,8 @@ class Render {
   }
   
   OUTLINE_LINE_WEIGTH = 0.25;
-  lastKnownOutlineZ = undefined;
-  lastKnownCameraZ = undefined;
+  lastKnownOutlineZ   = undefined;
+  lastKnownCameraZ    = undefined;
 
   drawOutlineScreen(z) {
     const buffer = this.outlineScreen;
@@ -2176,38 +2185,62 @@ function draw_grid() {
   let by_status = new Map();
   
   let hex = new HexOddQ(0, 0);
+  let chunk = new Chunk(0, 0);
   let info = new HexInfo();
 
-  // draw color of chunks
-  for (let row = bounding_box.minY; row <= bounding_box.maxY; row++) {
-    for (let col = bounding_box.minX; col <= bounding_box.maxX ; col++) {
-      // reuse hex
-      HexOddQ.rec(hex, col, row);
+  // draw colors of chunks
+  //
+  // this is pretty stupid
+  // we should not just go and update everything
+  //
+  // most boards have less than that on a screen
+  const chunk_bounding_box_minY = Chunk.r_hex_r_from(bounding_box.minY);
+  const chunk_bounding_box_maxY = Chunk.r_hex_r_from(bounding_box.maxY);
+  const chunk_bounding_box_minX = Chunk.c_hex_r_from(bounding_box.minX);
+  const chunk_bounding_box_maxX = Chunk.c_hex_r_from(bounding_box.maxX);
 
-      let status = update_status(hex, info);
-      game.storage.oddq_getHexInfo(hex, info);
+  for (let chunk_row = chunk_bounding_box_minY; chunk_row <= chunk_bounding_box_maxY; chunk_row++) {
+    for (let chunk_col = chunk_bounding_box_minX; chunk_col <= chunk_bounding_box_maxX ; chunk_col++) {
+      
+      if (!game.storage.chunk_cr_isLoaded(chunk_col, chunk_row)) {
+        // draw generic grey area
+      } else {
+        for (let in_chunk_row = 0; in_chunk_row < Chunk.SIZE; in_chunk_row++) {
+          for (let in_chunk_col = 0; in_chunk_col < Chunk.SIZE; in_chunk_col++) {
+            const hex_col = chunk_col * Chunk.SIZE + in_chunk_col;
+            const hex_row = chunk_row * Chunk.SIZE + in_chunk_row;
 
-      if (!by_status.has(status)) {
-        by_status.set(status, []);
+            // now do the gather
+            // reuse hex
+            HexOddQ.rec(hex, hex_col, hex_row);
+            Chunk.cr_from(hex_col, hex_row, chunk);
+
+            let status = update_status(hex, info);
+            
+            if (status !== 'empty') {
+              if (!by_status.has(status)) {
+                by_status.set(status, []);
+              }
+              game.storage.oddq_getHexInfo(hex, info);
+              by_status.get(status).push({info: info.clone(), hex: hex.clone()});
+            }
+          }
+        }
       }
-      by_status.get(status).push({info: info.clone(), hex: hex.clone()});
     }
   }
 
   // draw each kind of hexagon
   for (const status of by_status.keys()) {
     let calculated_color = color_from_status(status);
-    /* calculated_color !== EMPTY */
-    if (true) {
-      const ctx  = game.render.screen.ctx;
-      ctx.fillStyle = calculated_color.style;
-      for (const {hex: hex} of by_status.get(status)) {
-        const {x: screen_x, y: screen_y} = game.render.oddq_logicalToScreen(hex, 0);
-        const size = game.render.hexagonSize(0);
-        // create path for hexagon and stroke / fill it
-        Render.xy_path_hexagon(screen_x, screen_y, ctx, size);
-        ctx.fill();
-      }
+    const ctx  = game.render.screen.ctx;
+    ctx.fillStyle = calculated_color.style;
+    for (const {hex: hex} of by_status.get(status)) {
+      const {x: screen_x, y: screen_y} = game.render.oddq_logicalToScreen(hex, 0);
+      const size = game.render.hexagonSize(0);
+      // create path for hexagon and stroke / fill it
+      Render.xy_path_hexagon(screen_x, screen_y, ctx, size);
+      ctx.fill();
     }
   }
 
@@ -2351,14 +2384,14 @@ function update_status(hex, reuse=null) {
   const current_completed = info.completed;
   const current_is_empty  = info.type === "empty";
 
-  let all_loaded = game.storage.cr_hexLoaded(hex.col, hex.row);
+  let all_loaded = game.storage.hex_cr_isLoaded(hex.col, hex.row);
   let unlocked = true;
 
   for (let i = 2; i <= 4; ++i) {
     let col = hex.circleNeighbourCol(i)
     let row = hex.circleNeighbourRow(i)
     game.storage.cr_getHexInfo(col, row, info);
-    all_loaded &&= game.storage.cr_hexLoaded(col, row);
+    all_loaded &&= game.storage.hex_cr_isLoaded(col, row);
     unlocked   &&= info.type === "empty" || info.completed;
   }
   
@@ -2375,7 +2408,7 @@ function update_status(hex, reuse=null) {
       updated_status = 'locked'
     }
   }
-  if (game.storage.cr_hexLoaded(hex.col, hex.row)) {
+  if (game.storage.hex_cr_isLoaded(hex.col, hex.row)) {
     game.storage.cr_updateHexInfoStatus(hex.col, hex.row, updated_status);
   }
   return updated_status;
@@ -2612,7 +2645,7 @@ async function save_selected() {
   if (response.ok) {
     register_event()
     update_form_with_new_data(data);
-    if (game.storage.oddq_hexLoaded(game.selected.hex)) {
+    if (game.storage.oddq_hex_isLoaded(game.selected.hex)) {
       game.storage.oddq_updateHexInfo(game.selected.hex, game.selected.info);
       // NOTE(ivan): this is needed because we changed the data 
       //             and probably the status has changed
@@ -2998,7 +3031,7 @@ function process_pending_UI_events() {
       case 'HEX_REMOVED': {
         const col = event.hex.col;
         const row = event.hex.row;
-        if (game.storage.cr_hexLoaded(col, row)) {
+        if (game.storage.hex_cr_isLoaded(col, row)) {
           game.storage.cr_removeCell(col, row);
         }
         form_new_task();
