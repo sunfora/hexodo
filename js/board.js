@@ -15,8 +15,6 @@ import {
 
 import * as gmath from "./modules/gmath.js"
 
-
-
 // NOTE(ivan) dynamic debug imports 
 if (appConfig.dev) {
   import("../components/debug-slider.js");
@@ -2599,6 +2597,18 @@ function draw_animation_frame() {
   game.render.updateScreenDimensions();
   game.render.screen.clear();
   game.render.cameraToScreen();
+  // TODO(ivan): rework & remove this garbage 
+  //              
+  //             Freezing the camera to draw the frame is
+  //             a sign that I just have a bad design here.
+  //             
+  //             It is not clever and it shouldn't exist.
+  //             
+  //             Nothing should move or depend on time
+  //             when I draw a frame.
+  //             
+  //             Things like these will only complicate matters in the future.
+  //
   game.camera.withFreeze(draw_grid);
   if (game.inventory.isOpen) {
     draw_inventory();
