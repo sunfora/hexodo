@@ -583,7 +583,15 @@ export class Vec2 {
     return Vec2.rec(other, x, y);
   }
   
-  // TODO(ivan): add comment here
+  /**
+   * RESEARCH(ivan): how can we quickly visually check 
+   *                 if does the work as I state here?
+   *                 
+   * Rotates vector by angle in radians clockwise.
+   *
+   * @param {number} angle - angle in radians clockwise
+   *
+   */
   rotateBy(angle) {
     const vx = this.x;
     const vy = this.y;
@@ -595,7 +603,18 @@ export class Vec2 {
     this.y = vx * ay + vy * ax;
   }
 
-  // TODO(ivan): add comment here
+  /**
+   * RESEARCH(ivan): how can we quickly visually check 
+   *                 if does the work as I state here?
+   *
+   * Rotates vector by angle in radians clockwise.
+   *
+   * @param   {Vec2}   vec    - 2d vector to be rotated
+   * @param   {number} angle  - angle in radians clockwise
+   * @param   {Vec2?}  target - target to fill the output to
+   *
+   * @returns {Vec2}          - rotated vector
+   */
   static rotate(vec, angle, target=null) {
     const vx = vec.x;
     const vy = vec.y;
@@ -608,7 +627,15 @@ export class Vec2 {
     return Vec2.recOrNew(target, x, y); 
   }
 
-  // TODO(ivan): add comment here
+  /**
+   * Adds two vectors together.
+   * 
+   * @param   {Vec2}  a      - vector to add
+   * @param   {Vec2}  b      - vector to add
+   * @param   {Vec2?} target - vector to reuse as output
+   * 
+   * @returns {Vec2}         - added vector
+   */
   static add(a, b, target=null) {
     Vec2.recOrNew(target, a.x + b.x, a.y + b.y)
   }
