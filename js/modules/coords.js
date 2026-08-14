@@ -449,33 +449,33 @@ export class HexCube {
 
 /**
  * Transforms cube hex coordinates to oddq.
- * @param {HexCube}  hex - cube coords
- * @param {?HexOddQ} dest - oddq coords
+ * @param {HexCube}  hex    - cube coords
+ * @param {HexOddQ?} target - oddq coords
  */
-export function cube_to_oddq(hex, dest=null) {
+export function cube_to_oddq(hex, target=null) {
   let col = hex.q;
   let row = hex.r + (hex.q - (hex.q&1)) / 2;
-  return HexOddQ.recOrNew(dest, col, row);
+  return HexOddQ.recOrNew(target, col, row);
 }
 
 /**
  * Transforms oddq hex coordinates to cube.
- * @param {HexOddQ} - oddq coords
- * @param {?HexCube} - cube coords
+ * @param {HexOddQ}  hex    - oddq coords
+ * @param {HexCube?} target - cube coords
  */
-export function oddq_to_cube(hex, dest=null) {
+export function oddq_to_cube(hex, target=null) {
   let q = hex.col;
   let r = hex.row - (hex.col - (hex.col&1)) / 2;
-  return HexCube.recOrNew(dest, q, r, -(q + r));
+  return HexCube.recOrNew(target, q, r, -(q + r));
 }
 
 
 /**
  * Using hex cube coords find nearest cube with integer coords.
- * @param {HexCube} hex - floating point hex cube.
- * @param {?HexCube} dest - the result with integer coordinates.
+ * @param {HexCube}  hex    - floating point hex cube.
+ * @param {HexCube?} target - the result with integer coordinates.
  */
-export function cube_round(hex, dest=null) {
+export function cube_round(hex, target=null) {
   let q_i = Math.round(hex.q);
   let r_i = Math.round(hex.r);
   let s_i = Math.round(hex.s);
@@ -491,7 +491,7 @@ export function cube_round(hex, dest=null) {
   } else {
     s_i = -(q_i + r_i);
   }
-  return HexCube.recOrNew(dest, q_i, r_i, s_i);
+  return HexCube.recOrNew(target, q_i, r_i, s_i);
 }
 
 
@@ -643,47 +643,53 @@ export class Vec2 {
 
 /**
  * Convert hex in qube/axial coordinates to cartesian logical coordinate space.
- * @param {HexCube} hex - hex in cubic coordinates
- * @param {?Vec2} - dest point in cartesian space [result is written there]
+ *
+ * @param {HexCube} hex    - hex in cubic coordinates
+ * @param {Vec2?}   target - point in cartesian space [result is written there]
+ *
  */
-export function cube_to_vec2(hex, dest=null) {
+export function cube_to_vec2(hex, target=null) {
   // hex to cartesian
   let x = 3./2 * hex.q;
   let y = Math.sqrt(3)/2 * hex.q  +  Math.sqrt(3) * hex.r;
-  return Vec2.recOrNew(dest, x, y);
+  return Vec2.recOrNew(target, x, y);
 }
 
 /**
  * Turn cartesian coords to cubic hex.
  *
- * @param {number} x - x coord
- * @param {number} y - y coord
- * @param {?HexCube} dest - result in cube coords
+ * @param {number}   x      - x coord
+ * @param {number}   y      - y coord
+ * @param {HexCube?} target - result in cube coords
  */
-export function xy_to_cube(x, y, dest=null) {
+export function xy_to_cube(x, y, target=null) {
   let q = 2 * x / 3;
   let r = -1./3 * x + Math.sqrt(3) / 3 * y;
-  return HexCube.recOrNew(dest, q, r, -(q + r));
+  return HexCube.recOrNew(target, q, r, -(q + r));
 }
 
 /**
  * Turn cartesian coords to cubic hex.
  *
- * @param {Vec2} vec - vector/point in cartesian coords
- * @param {?HexCube} dest - result in cube coords
+ * @param {Vec2}     vec    - vector/point in cartesian coords
+ * @param {HexCube?} target - result in cube coords
  */
-export function vec2_to_cube(vec, dest=null) {
-  return xy_to_cube(vec.x, vec.y, dest);
+export function vec2_to_cube(vec, target=null) {
+  return xy_to_cube(vec.x, vec.y, target);
 }
 
 /**
  * Convert hex in oddq coordinates to cartesian logical coordinate space.
- * @param {HexOddQ} hex - hex in cubic coordinates
- * @param {?Vec2} - dest point in cartesian space [result is written there]
- * @returns {Vec2} - point in cartesian coordinat space
+ * @param   {HexOddQ} hex    - hex in cubic coordinates
+ * @param   {Vec2?}   target - point in cartesian space [result is written there]
+ * @returns {Vec2}           - point in cartesian coordinat space
  */
-export function oddq_to_vec2(hex, dest=null) {
-  // NOTE(ivan): inlined cube_to_vec2(oddq_to_cube(hex))
+export function oddq_to_vec2(hex, target=null) {
+  // NOTE(ivan): inlined version of
+  //
+  //   const cube_hex = oddq_to_cube(hex)
+  //   const vec2     = cube_to_vec2(cube_hex)
+  //
 
   // oddq_to_cube
   const q = hex.col;
@@ -693,17 +699,24 @@ export function oddq_to_vec2(hex, dest=null) {
   const x = 3./2 * q;
   const y = Math.sqrt(3)/2 * q  +  Math.sqrt(3) * r;
 
-  return Vec2.recOrNew(dest, x, y);
+  return Vec2.recOrNew(target, x, y);
 }
 
 /**
  * Using cartesian x, y round to nearest hex in oddq coordinates.
- * @param {number} x - x coordinate
- * @param {number} y - y coordinate
- * @param {?HexOddQ} dest - reuse 
- * @returns {HexOddQ} - nearest hex in oddq
+ * @param   {number}   x      - x coordinate
+ * @param   {number}   y      - y coordinate
+ * @param   {HexOddQ?} target - reuse 
+ * @returns {HexOddQ}         - nearest hex in oddq
  */
-export function xy_nearest_oddq(x, y, dest=null) {
+export function xy_nearest_oddq(x, y, target=null) {
+  // NOTE(ivan): inlined version of
+  //
+  // const hex     = xy_to_cube(x, y)
+  // const rounded = cube_round(hex)
+  // const oddq    = cube_to_oddq(rounded)
+  //
+
   // convert xy -> cube / axial
   let q = 2 * x / 3;
   let r = -1./3 * x + Math.sqrt(3) / 3 * y;
@@ -728,7 +741,7 @@ export function xy_nearest_oddq(x, y, dest=null) {
   let col = q_i;
   let row = r_i + (q_i - (q_i & 1)) / 2;
 
-  return HexOddQ.recOrNew(dest, col, row);
+  return HexOddQ.recOrNew(target, col, row);
 }
 
 
