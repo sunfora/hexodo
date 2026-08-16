@@ -2175,9 +2175,9 @@ function draw_grid() {
 
   let by_status = new Map();
   
-  let hex = new HexOddQ(0, 0);
+  let hex   = new HexOddQ(0, 0);
   let chunk = new Chunk(0, 0);
-  let info = new HexInfo();
+  let info  = new HexInfo();
 
   // draw colors of chunks
   //
