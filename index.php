@@ -50,19 +50,7 @@ function load_his_tasks() {
       </canvas>
     </div>
     <div class="task-viewer">
-    <button id="toggle-list-view"> list view </button>
     <button id="remove-button"> remove task from cell </button>
-    <section id="list-view" hidden>
-      <section id="active-section">
-          <ul id="active-list"></ul>
-      </section>
-      <section id="done-section">
-          <ul id="done-list"></ul>
-      </section>
-      <section id="locked-section">
-          <ul id="locked-list"></ul>
-      </section>
-    </section>
     <form id="task-form">
         <div id="task-form-tools"> 
           <h2 id="task-form-header">Loading Task...</h2>
@@ -162,65 +150,6 @@ function load_footer() {
   <head>
     <style>
        
-      #list-view {
-        padding: 1em;
-        margin: 1em 0;
-
-        li {
-          &::before {
-            display: inline-block;
-            content: '⬣';
-            margin-right: 1em;
-          }
-        }
-
-        li.selected {
-          &::before {
-            color: gold !important;
-          }
-          text-decoration: underline !important;
-        }
-
-        max-height: 60vh;
-        overflow: scroll;
-        scroll-snap-type: x mandatory;
-        #active-list li::before {
-          color: orange;
-        }
-        #done-list li {
-          &::before {
-            color: green;
-          }
-          text-decoration: line-through;
-        }
-
-        #locked-list li::before {
-          color: red;
-        }
-
-        section {
-          width: 100%;
-          flex: none;
-          scroll-snap-align: center; 
-          scroll-snap-stop: always;
-        }
-        h2 {
-          font-size: 16px;
-        }
-        ul {
-          margin: 0;
-          list-style: none;
-          padding: 0;
-          width: 100%;
-          li {
-            font-size: 14px;
-            cursor: pointer;
-            padding: 1em;
-            font-family: "Helvetia Neue", Arial, sans-serif;
-            font-weight: bold;
-          }
-        }
-      }
       #here {
         font-weight: bold;  
       }

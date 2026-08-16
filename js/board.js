@@ -16,16 +16,6 @@ if (appConfig.dev) {
 const board_id = window.appConfig.board.board_id;
 const user_name = window.appConfig.user_id;
 
-const list_view = document.getElementById('list-view');
-
-const active_section = document.getElementById('active-section');
-const toggle_list_view = document.getElementById('toggle-list-view');
-
-const active_list = document.getElementById('active-list');
-const done_list = document.getElementById('done-list');
-const locked_list = document.getElementById('locked-list');
-
-
 const remove_button = document.getElementById('remove-button');
 
 const canvas = document.getElementById('hex-grid');
@@ -650,77 +640,6 @@ function inspect_slider(object, property) {
   slider.addEventListener("input", e => {
     object[property] = slider.value;
   });
-}
-
-let done = [];
-let locked = [];
-let active = [];
-
-/**
- * @param {array} new_array - update with
- */
-function array_changed(old_array, new_array) {
-  if (new_array.length !== old_array.length) {
-    return true;
-  }
-  for (const {hex: hex_old, info: info_old} of old_array) {
-    let has = false;
-    for (const {hex: hex_new, info: info_new} of new_array) {
-      const element_eq = hex_old.equals(hex_new) && info_old.equals(info_new)
-      if (element_eq) {
-        has = true;
-        break;
-      }
-    }
-    if (!has) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function toggle_list_with_editor() {
-  if (list_view.hasAttribute('hidden')) {
-    task_widget.e_form.setAttribute('hidden', '');
-    list_view.removeAttribute('hidden');
-    toggle_list_view.textContent = 'edit selected';
-    return 'list-view';
-  } else {
-    task_widget.e_form.removeAttribute('hidden');
-    list_view.setAttribute('hidden', '');
-    toggle_list_view.textContent = 'list view';
-    return 'editor';
-  }
-}
-
-function update_list(elem_list, old_list, new_list) {
-  if (array_changed(old_list, new_list)) {
-    elem_list.textContent = ""; 
-    for (const {hex: hex, info: info} of new_list) {
-      const listItem = document.createElement('li');
-      listItem.textContent = info.title; 
-      listItem.setAttribute('data-col', hex.col);
-      listItem.setAttribute('data-row', hex.row);
-      elem_list.appendChild(listItem);
-    }
-    return true;
-  }
-  return false;
-}
-
-function update_lists(new_active, new_done, new_locked) {
-  if (list_view.hasAttribute('hidden')) {
-    return;
-  }
-  if (update_list(active_list, active, new_active)) {
-    active = new_active;
-  }
-  if (update_list(done_list, done, new_done)) {
-    done = new_done;
-  }
-  if (update_list(locked_list, locked, new_locked)) {
-    locked = new_locked;
-  }
 }
 
 function update_form(header_message) {
@@ -2354,12 +2273,6 @@ function draw_grid() {
       draw_outlined_text(game.underCursor.hex, game.underCursor.info.title, u_scale);
     }
   }
-
-  update_lists(
-    by_status.get('todo') ?? [], 
-    by_status.get('done') ?? [], 
-    by_status.get('locked') ?? []
-  );
 }
 
 /**
@@ -2728,16 +2641,6 @@ function wire_dom_events() {
     await task_widget.copy_to_clipboard();
   });
 
-  $(list_view).addEventListener('click', (event) => {
-    if (event.target.tagName === 'LI') {
-
-      let col = parseInt(event.target.getAttribute('data-col'));
-      let row = parseInt(event.target.getAttribute('data-row'));
-
-      register_event('LIST_ITEM_SELECTED', {hex: {col, row}});
-    }
-  });
-  
   // NOTE(ivan): ugly hack
   // TODO(ivan): remove this trash
   // why? I need to save the things when input happens but I need to wait a little so...
@@ -2770,10 +2673,6 @@ function wire_dom_events() {
     event.preventDefault(); 
     register_event('REQUEST_SAVE_SELECTED', {});
   });
-
-  $(toggle_list_view).addEventListener('click', () => {
-    register_event('REQUEST_UI_TOGGLE', {});
-  }); 
 }
 
 function unwire_dom_events() {
@@ -2864,11 +2763,6 @@ function process_pending_UI_events() {
       case 'UI_FOCUSED':
         break;
       case 'UI_BLURRED': {
-        break;
-      }
-      case 'REQUEST_UI_TOGGLE': {
-        const which = toggle_list_with_editor();
-        register_event('UI_TOGGLED', {to: which});
         break;
       }
       case 'REQUEST_UI_FOCUS': {
@@ -3050,15 +2944,6 @@ function process_pending_UI_events() {
         break;
       }
       case 'SELECTED_CHANGED': {
-        let old = list_view.querySelector(".selected");
-        if (old !== null) {
-          old.classList.remove('selected');
-        }
-        let now = list_view.querySelector(`[data-col="${game.selected.hex.col}"][data-row="${game.selected.hex.row}"]`);
-        if (now !== null) {
-          now.classList.add('selected');
-          now.scrollIntoView();
-        }
         break;
       }
       case 'HEXAGON_SELECTED': {
