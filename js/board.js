@@ -1,13 +1,6 @@
 import {
-  oddq_to_cube, 
-  cube_to_oddq, 
-  cube_round,
-  vec2_to_cube,
-  cube_to_vec2,
-  xy_to_cube,
   xy_nearest_oddq,
   oddq_to_vec2,
-  HexCube, 
   HexOddQ,
   Vec2,
   Vec3
