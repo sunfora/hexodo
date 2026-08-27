@@ -15,6 +15,8 @@
 #include <stdio.h>
 #include <poll.h>
 #include <string.h>
+#include <arpa/inet.h>
+#include <signal.h>
 
 #define PAGE    4096
 #define TIMEOUT 1000
@@ -104,6 +106,7 @@ int main(int argc, char** argv) {
       if (r_bind >= 0) {
         r_listen = listen(fd_entrance, queue_size);
         if (r_listen >= 0) {
+          char *ip_string     = NULL;
           while (1) {
             serv_update_connections_queued(serv);
             
@@ -111,22 +114,33 @@ int main(int argc, char** argv) {
             if (events_happened > 0) {
 
               int times = serv->events_count;
-              for (int i = 0; i < times; i++) {
-                struct pollfd* event = &serv->events[i];
-
+              struct pollfd* event = NULL;
+              for (int i = 0; i < times; i++) { 
+                event = &serv->events[i]; 
                 if (event->fd == fd_entrance) {
                   if (event->revents & POLLIN) {
-                    struct sockaddr_in  new_connection_addr   = {0};
-                    struct sockaddr    *i_new_connection_addr = (void*)& new_connection_addr;
-                    socklen_t           s_new_connection_addr = sizeof   new_connection_addr;
-                    int new_fd = accept(fd_entrance, i_new_connection_addr, &s_new_connection_addr);
-                    serv_push_fd(serv, new_fd);
-                    puts("Received connection!");
+
+                    struct sockaddr_in  addr_new_connection   = {0};
+                    struct sockaddr    *i_addr_new_connection = (void*)& addr_new_connection;
+                    socklen_t           s_addr_new_connection = sizeof   addr_new_connection;
+
+                    int fd_new_connection = accept(fd_entrance, i_addr_new_connection, &s_addr_new_connection);
+                    serv_push_fd(serv, fd_new_connection);
+
+                    // DONE(ivan): print ip of a connected guy here
+                    // TODO(ivan): make an interface for arena
+                    {
+                      ip_string =  memory;
+                      memory    += INET_ADDRSTRLEN;
+                      struct in_addr *i_sin_addr = &addr_new_connection.sin_addr;
+                      int             sin_port   = ntohs(addr_new_connection.sin_port);
+                      inet_ntop(AF_INET, i_sin_addr, ip_string, INET_ADDRSTRLEN);
+                      printf("Received connection %s:%d\n", ip_string, sin_port);
+                    }
                     printf("queued: %d\n", serv->connections_queued);
                     fflush(stdout);
                     // RESEARCH(ivan): good we started receiving them
                     //                 but how do we close?
-                    // TODO(ivan): print ip of a connected guy here
                   }
                 } else {
                   // TODO(ivan): handle connection
