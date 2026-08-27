@@ -106,7 +106,12 @@ int main(int argc, char** argv) {
       if (r_bind >= 0) {
         r_listen = listen(fd_entrance, queue_size);
         if (r_listen >= 0) {
+
+          void *request_handle_start = memory;
           char *ip_string     = NULL;
+          void *message_start = NULL;
+          int   message_size  = 0;
+
           while (1) {
             serv_update_connections_queued(serv);
             
@@ -143,7 +148,38 @@ int main(int argc, char** argv) {
                     //                 but how do we close?
                   }
                 } else {
+                  // TODO(ivan): just print it back
                   // TODO(ivan): handle connection
+                  if (event->revents & POLLIN) {
+                    if (message_start == NULL) {
+                      puts("MSG-BEGIN");
+                      puts("++");
+                      message_start = memory;
+                    }
+
+                    void* message_current = message_start + message_size;
+                    int max_read_size = 1024;
+                    int data_read = 0;
+
+                    data_read = read(event->fd, message_current, max_read_size);
+                    if (data_read == 0) {
+                      puts("--");
+                      puts("MSG-END");
+                      
+                      int r_close = close(event->fd);
+                      if (r_close >= 0) {
+                        puts("Connection closed");
+                        // TODO(ivan): also remove the connection
+                        // TODO(ivan): we probably want to get out so we need some round robin
+                      } else {
+                        // TODO(ivan): handle
+                      }
+
+                    } else {
+                      write(STDOUT_FILENO, message_current, data_read);
+                      message_size  += data_read;
+                    }
+                  }
                 }
               }
             } else if (events_happened == -1) {
