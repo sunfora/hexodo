@@ -18,11 +18,12 @@
 #include <arpa/inet.h>
 #include <stdlib.h>
 
-#define PAGE    4096
 #define TIMEOUT 1000
 
 #define MAX_CONNECTIONS 1000
 
+#define PAGE_SIZE __page_size
+uint64_t __page_size;
 struct serv {
   int events_count;
   int events_max;
@@ -59,8 +60,10 @@ void serv_update_connections_queued(struct serv *s) {
 //
 int main(int argc, char** argv) {
 
+  __page_size = sysconf(_SC_PAGE_SIZE);
+
   void*  location    = NULL; // let the system decide
-  size_t size        = PAGE * 10; 
+  size_t size        = PAGE_SIZE * 10; 
   int    permissions = PROT_READ | PROT_WRITE; // let me read, let me write
   int    type        = MAP_ANONYMOUS | MAP_PRIVATE; // just give me virtual memory
   int    fd          = -1; // there is no file backing
