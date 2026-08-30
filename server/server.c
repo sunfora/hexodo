@@ -263,7 +263,7 @@ int main(int argc, char** argv)
                       }
 
                     } else {
-                      write(STDOUT_FILENO, message_current, data_read);
+                      int _ = write(STDOUT_FILENO, message_current, data_read);
                       message_size  += data_read;
                     }
                   }
