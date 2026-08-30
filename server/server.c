@@ -16,7 +16,7 @@
 #include <poll.h>
 #include <string.h>
 #include <arpa/inet.h>
-#include <signal.h>
+#include <stdlib.h>
 
 #define PAGE    4096
 #define TIMEOUT 1000
@@ -38,6 +38,7 @@ void serv_push_fd(struct serv* serv, int fd) {
     serv->events_count += 1;
   } else {
     // TODO(ivan): log that we have no place
+    abort();
   }
 }
 
@@ -172,7 +173,8 @@ int main(int argc, char** argv) {
                         // TODO(ivan): also remove the connection
                         // TODO(ivan): we probably want to get out so we need some round robin
                       } else {
-                        // TODO(ivan): handle
+                        // TODO(ivan): handle errors
+                        abort();
                       }
 
                     } else {
@@ -184,18 +186,23 @@ int main(int argc, char** argv) {
               }
             } else if (events_happened == -1) {
               // TODO(ivan): handle poll errors
+              abort();
             }
           }
         } else {
           // TODO(ivan): handle listen errors
+          abort();
         }
       } else {
         // TODO(ivan): handle socket errors
+        abort();
       }
     } else {
       // TODO(ivan): handle it
+      abort();
     }
   } else {
     // TODO(ivan): handle it
+    abort();
   }
 }
