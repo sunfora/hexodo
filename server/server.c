@@ -46,7 +46,7 @@ void serv_push_fd(struct serv* serv, int fd) {
 void serv_update_connections_queued(struct serv *s) {
   struct tcp_info info;
   void      *i_info  = (void*)& info;
-  socklen_t  s_info  = sizeof(info);
+  socklen_t  s_info  = sizeof   info;
   
   int r_getsockopt = -1;
   r_getsockopt = getsockopt(s->fd_entrance, IPPROTO_TCP, TCP_INFO, i_info, &s_info);
