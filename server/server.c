@@ -137,21 +137,29 @@ struct arena arena_make(uint64_t reserve)
   return arena;
 }
 
+bool arena_initialized(struct arena* arena)
+{
+  return arena->memory_begin != NULL;
+}
+
 struct serv 
 {
   int events_count;
   int events_max;
   int fd_entrance;
   int connections_queued;
-  struct pollfd events[];
+  struct pollfd*      events;
+  struct sockaddr_in* addresses;
 };
 
-void serv_push_fd(struct serv* serv, int fd) 
+uint16_t serv_create_connection(struct serv* serv) 
 {
-  if (serv->events_count < serv->events_max) {
-    serv->events[serv->events_count].fd     = fd;
-    serv->events[serv->events_count].events = POLLIN;
+  uint16_t connection_id = serv->events_count;
+  if (connection_id < serv->events_max) {
+    serv->events[connection_id].fd     = -1;
+    serv->events[connection_id].events = POLLIN;
     serv->events_count += 1;
+    return connection_id;
   } else {
     // TODO(ivan): log that we have no place
     abort();
@@ -179,23 +187,17 @@ int main(int argc, char** argv)
 
   __page_size = sysconf(_SC_PAGE_SIZE);
 
-  void*  location    = NULL; // let the system decide
-  size_t size        = PAGE_SIZE * 10; 
-  int    permissions = PROT_READ | PROT_WRITE; // let me read, let me write
-  int    type        = MAP_ANONYMOUS | MAP_PRIVATE; // just give me virtual memory
-  int    fd          = -1; // there is no file backing
-  int    offset      = 0;  // and there is no offset in file as well
-  void* memory = mmap(location, size, permissions, type, fd, offset);
+  struct arena  d_arena = arena_make(PAGE_SIZE * 100);
+  struct arena* arena   = &d_arena;
 
-  if (memory != NULL) {
-
-    int reserve_space = sizeof(struct serv) 
-                      + sizeof(struct pollfd) * MAX_CONNECTIONS;
-    memset(memory, 0, reserve_space);
-    struct serv *serv = (struct serv*) memory;
-    memory = memory + reserve_space;
-
-    serv->events_max = MAX_CONNECTIONS + 1;
+  if (arena_initialized(arena)) {
+    
+    struct serv* serv = arena_push(arena, sizeof(struct serv));
+    {
+      serv->events     = arena_push(arena, sizeof(struct pollfd)      * MAX_CONNECTIONS);
+      serv->addresses  = arena_push(arena, sizeof(struct sockaddr_in) * MAX_CONNECTIONS);
+      serv->events_max = MAX_CONNECTIONS + 1;
+    }
 
     // socket settings
     struct sockaddr_in server_address   = {0};
@@ -220,17 +222,20 @@ int main(int argc, char** argv)
 
     fd_entrance = socket(AF_INET, SOCK_STREAM, 0);
     if (fd_entrance >= 0) {
-      serv_push_fd(serv, fd_entrance);
-      serv->fd_entrance = fd_entrance;
+      
+      uint16_t id_entrance = serv_create_connection(serv);
+      serv->events[id_entrance].fd = fd_entrance;
+      serv->fd_entrance            = fd_entrance;
+
       setsockopt(fd_entrance, SOL_SOCKET, SO_REUSEADDR, i_reuseaddr, s_reuseaddr);
       r_bind = bind(fd_entrance, i_server_address, s_server_address);
       if (r_bind >= 0) {
         r_listen = listen(fd_entrance, queue_size);
         if (r_listen >= 0) {
 
-          void *request_handle_start = memory;
-          char *ip_string     = NULL;
-          void *message_start = NULL;
+          // void* request_handle_start = memory;
+          char* ip_string     = NULL;
+          void* message_start = NULL;
           int   message_size  = 0;
 
           while (1) {
@@ -245,23 +250,23 @@ int main(int argc, char** argv)
                 event = &serv->events[i]; 
                 if (event->fd == fd_entrance) {
                   if (event->revents & POLLIN) {
+                    
+                    uint16_t connection_id = serv_create_connection(serv);
+                    struct sockaddr* i_addr_connection = (void*)& serv->addresses[connection_id];
+                    socklen_t        s_addr_connection = sizeof   serv->addresses[connection_id];
 
-                    struct sockaddr_in  addr_new_connection   = {0};
-                    struct sockaddr    *i_addr_new_connection = (void*)& addr_new_connection;
-                    socklen_t           s_addr_new_connection = sizeof   addr_new_connection;
-
-                    int fd_new_connection = accept(fd_entrance, i_addr_new_connection, &s_addr_new_connection);
-                    serv_push_fd(serv, fd_new_connection);
+                    serv->events[connection_id].fd = accept(fd_entrance, i_addr_connection, &s_addr_connection);
 
                     // DONE(ivan): print ip of a connected guy here
-                    // TODO(ivan): make an interface for arena
+                    // DONE(ivan): make an interface for arena
                     {
-                      ip_string =  memory;
-                      memory    += INET_ADDRSTRLEN;
-                      struct in_addr *i_sin_addr = &addr_new_connection.sin_addr;
-                      int             sin_port   = ntohs(addr_new_connection.sin_port);
+                      ip_string = arena_push(arena, INET_ADDRSTRLEN);
+                      struct in_addr *i_sin_addr = &serv->addresses[connection_id].sin_addr;
+                      int             sin_port   = ntohs(serv->addresses[connection_id].sin_port);
                       inet_ntop(AF_INET, i_sin_addr, ip_string, INET_ADDRSTRLEN);
                       printf("Received connection %s:%d\n", ip_string, sin_port);
+                      arena_pop(arena, INET_ADDRSTRLEN);
+                      ip_string = NULL;
                     }
                     printf("queued: %d\n", serv->connections_queued);
                     fflush(stdout);
@@ -269,6 +274,7 @@ int main(int argc, char** argv)
                     //                 but how do we close?
                   }
                 } else {
+                  #if 0
                   // TODO(ivan): just print it back
                   // TODO(ivan): handle connection
                   if (event->revents & POLLIN) {
@@ -302,6 +308,7 @@ int main(int argc, char** argv)
                       message_size  += data_read;
                     }
                   }
+                  #endif
                 }
               }
             } else if (events_happened == -1) {
