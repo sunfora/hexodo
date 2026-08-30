@@ -2,3 +2,4 @@
 *.db
 vendor
 server.log
+.gdb_history
