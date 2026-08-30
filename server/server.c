@@ -130,8 +130,9 @@ struct arena arena_make(uint64_t reserve)
   struct arena arena = {0};
 
   if (memory != NULL) {
-    arena.memory_begin  = memory;  
-    arena.memory_cursor = memory;
+    arena.memory_begin   = memory;  
+    arena.memory_cursor  = memory;
+    arena.space_reserved = reserve;
   }
   return arena;
 }
