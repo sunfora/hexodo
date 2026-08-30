@@ -6,6 +6,7 @@
 
   All rights reserved. */
 
+#include <stdint.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
@@ -16,6 +17,7 @@
 #include <poll.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <stdbool.h>
 #include <stdlib.h>
 
 #define TIMEOUT 1000
@@ -24,6 +26,78 @@
 
 #define PAGE_SIZE __page_size
 uint64_t __page_size;
+
+struct arena {
+  uint64_t space_reserved;
+  uint64_t space_commited;
+  uint64_t using_actually;
+
+  uint8_t* memory_begin;
+  uint8_t* memory_cursor;
+};
+
+uint64_t page_alligned(uint64_t space) {
+   uint64_t page_size  = PAGE_SIZE;
+   uint64_t round_mask = page_size - 1;
+   space += round_mask;
+   space &= round_mask;
+   return space;
+}
+
+void* arena_push(struct arena* restrict arena, uint64_t block_size) {
+  void* cursor = arena->memory_cursor;
+
+  uint64_t used_size = arena->using_actually;
+  uint64_t would_size;
+
+  int32_t cannot_push = false;
+  cannot_push = cannot_push || __builtin_add_overflow(used_size, block_size, &would_size);
+  cannot_push = cannot_push || would_size > arena->space_reserved;
+
+  if (cannot_push) {
+    // in case we messed something up
+    abort();
+  }
+
+  for (uint64_t i = 0; i < block_size; i += 1) {
+    arena->memory_cursor[i] = 0;
+  }
+
+  arena->memory_cursor  = arena->memory_cursor + block_size;
+  arena->using_actually = would_size;
+  arena->space_commited = page_alligned(would_size);
+
+  return cursor;
+}
+
+void arena_pop(struct arena* restrict arena, uint64_t block_size) {
+  void* cursor = arena->memory_cursor;
+
+  uint64_t used_size = arena->using_actually;
+  uint64_t commited  = arena->space_commited;
+
+  if (block_size > used_size) {
+    // we cannot delete more than there exists anyway
+    // so we messed something up
+    abort();
+  }
+
+  uint64_t would_size   = used_size - block_size;
+  uint8_t* would_cursor = arena->memory_cursor - block_size;
+  uint64_t would_commit = page_alligned(would_size);
+
+  uint64_t freed_bytes = commited - would_commit;
+  void*    freed_from  = arena->memory_begin + would_commit;
+
+  arena->using_actually = would_size;
+  arena->memory_cursor  = would_cursor;
+  arena->space_commited = would_commit;
+  
+  if (freed_bytes) {
+    madvise(freed_from, freed_bytes, MADV_DONTNEED);
+  }
+}
+
 struct serv {
   int events_count;
   int events_max;
