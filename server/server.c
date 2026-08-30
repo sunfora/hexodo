@@ -27,7 +27,8 @@
 #define PAGE_SIZE __page_size
 uint64_t __page_size;
 
-struct arena {
+struct arena 
+{
   uint64_t space_reserved;
   uint64_t space_commited;
   uint64_t using_actually;
@@ -36,7 +37,8 @@ struct arena {
   uint8_t* memory_cursor;
 };
 
-uint64_t page_alligned(uint64_t space) {
+uint64_t page_alligned(uint64_t space) 
+{
    uint64_t page_size  = PAGE_SIZE;
    uint64_t round_mask = page_size - 1;
    space += round_mask;
@@ -44,7 +46,8 @@ uint64_t page_alligned(uint64_t space) {
    return space;
 }
 
-void* arena_push(struct arena* restrict arena, uint64_t block_size) {
+void* arena_push(struct arena* restrict arena, uint64_t block_size) 
+{
   void* cursor = arena->memory_cursor;
 
   uint64_t used_size = arena->using_actually;
@@ -70,7 +73,8 @@ void* arena_push(struct arena* restrict arena, uint64_t block_size) {
   return cursor;
 }
 
-void arena_pop(struct arena* restrict arena, uint64_t block_size) {
+void arena_pop(struct arena* restrict arena, uint64_t block_size) 
+{
   void* cursor = arena->memory_cursor;
 
   uint64_t used_size = arena->using_actually;
@@ -98,7 +102,8 @@ void arena_pop(struct arena* restrict arena, uint64_t block_size) {
   }
 }
 
-struct serv {
+struct serv 
+{
   int events_count;
   int events_max;
   int fd_entrance;
@@ -106,7 +111,8 @@ struct serv {
   struct pollfd events[];
 };
 
-void serv_push_fd(struct serv* serv, int fd) {
+void serv_push_fd(struct serv* serv, int fd) 
+{
   if (serv->events_count < serv->events_max) {
     serv->events[serv->events_count].fd     = fd;
     serv->events[serv->events_count].events = POLLIN;
@@ -117,7 +123,8 @@ void serv_push_fd(struct serv* serv, int fd) {
   }
 }
 
-void serv_update_connections_queued(struct serv *s) {
+void serv_update_connections_queued(struct serv *s) 
+{
   struct tcp_info info;
   void      *i_info  = (void*)& info;
   socklen_t  s_info  = sizeof   info;
@@ -132,7 +139,8 @@ void serv_update_connections_queued(struct serv *s) {
 //             but it may be easier to learn about how it works anyway 
 //             so let's try 
 //
-int main(int argc, char** argv) {
+int main(int argc, char** argv) 
+{
 
   __page_size = sysconf(_SC_PAGE_SIZE);
 
