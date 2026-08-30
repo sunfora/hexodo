@@ -102,6 +102,40 @@ void arena_pop(struct arena* restrict arena, uint64_t block_size)
   }
 }
 
+uint64_t arena_pos(struct arena* arena) 
+{
+  return arena->using_actually;
+}
+
+void arena_rewind(struct arena* arena, uint64_t pos) 
+{
+  if (pos > arena->using_actually) {
+    // something is wrong here, double free
+    abort();
+  }
+  uint64_t block_size = arena->using_actually - pos;
+  arena_pop(arena, block_size);
+}
+
+struct arena arena_make(uint64_t reserve)
+{
+  void*  location    = NULL; // let the system decide
+  size_t size        = reserve; 
+  int    permissions = PROT_READ | PROT_WRITE; // let me read, let me write
+  int    type        = MAP_ANONYMOUS | MAP_PRIVATE; // just give me virtual memory
+  int    fd          = -1; // there is no file backing
+  int    offset      = 0;  // and there is no offset in file as well
+  void* memory = mmap(location, size, permissions, type, fd, offset);
+  
+  struct arena arena = {0};
+
+  if (memory != NULL) {
+    arena.memory_begin  = memory;  
+    arena.memory_cursor = memory;
+  }
+  return arena;
+}
+
 struct serv 
 {
   int events_count;
