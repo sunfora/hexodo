@@ -42,7 +42,7 @@ uint64_t page_alligned(uint64_t space)
    uint64_t page_size  = PAGE_SIZE;
    uint64_t round_mask = page_size - 1;
    space += round_mask;
-   space &= round_mask;
+   space &= ~round_mask;
    return space;
 }
 
@@ -120,7 +120,7 @@ void arena_rewind(struct arena* arena, uint64_t pos)
 struct arena arena_make(uint64_t reserve)
 {
   void*  location    = NULL; // let the system decide
-  size_t size        = reserve; 
+  size_t size        = page_alligned(reserve); 
   int    permissions = PROT_READ | PROT_WRITE; // let me read, let me write
   int    type        = MAP_ANONYMOUS | MAP_PRIVATE; // just give me virtual memory
   int    fd          = -1; // there is no file backing
@@ -129,10 +129,10 @@ struct arena arena_make(uint64_t reserve)
   
   struct arena arena = {0};
 
-  if (memory != NULL) {
+  if (memory != MAP_FAILED) {
     arena.memory_begin   = memory;  
     arena.memory_cursor  = memory;
-    arena.space_reserved = reserve;
+    arena.space_reserved = size;
   }
   return arena;
 }
