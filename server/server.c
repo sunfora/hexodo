@@ -27,9 +27,38 @@
 #define PAGE_SIZE __page_size
 uint64_t __page_size;
 
-// stack is much like the arena, wheras alloca is standard
-// but it is not a great name, so I would give it a better one here
+/*
+   We want to treat stack allocations much alike we do arena allocations.
+   In other words allocate then pass a pointer to an initializing function.
+   Which expects zeroed out memory.
+*/
 #define stack_push(size) memset(alloca(size), 0, size)
+
+/*
+  So... The idea is to use for loop as kind of a defer block.
+  Things would happen at the end of a for loop,
+  it would do just one cycle and stop.
+
+  The weird genvar part is needed because we want these kind of blocks to
+  compose nicely and we don't wanna rely on variable shadowing.
+
+  Why? Because if you are like me you would sometimes be catching bugs
+  related to variable shadowing. And what is a good instrument to detect
+  variable shadowing? -Wshadow.
+
+  Which prints all of them to your terminal at once.
+
+  And suppose you have many such blocks around the codebase.
+  They would spam your terminal with that crap.
+  And you don't wanna that really.
+*/
+#define genvar_internal_body(name, thing) __ ## name ## _ ## thing
+#define genvar_internal(name, thing) genvar_internal_body(name, thing)
+#define genvar(name) genvar_internal(name, __LINE__)
+#define with_rewind(arena) \
+  for (uint64_t genvar(once) = 1, genvar(arena_rewind_pos) = arena_pos(arena); \
+                genvar(once); \
+                genvar(once) = 0, arena_rewind(arena, genvar(arena_rewind_pos)))
 
 struct arena 
 {
@@ -270,14 +299,15 @@ int main(int argc, char** argv)
 
                     // DONE(ivan): print ip of a connected guy here
                     // DONE(ivan): make an interface for arena
+                    with_rewind(scratch_arena)
                     {
                       ip_string = arena_push(scratch_arena, INET_ADDRSTRLEN);
+
                       struct in_addr *i_sin_addr = &serv->addresses[connection_id].sin_addr;
                       int sin_port = ntohs(serv->addresses[connection_id].sin_port);
 
                       inet_ntop(AF_INET, i_sin_addr, ip_string, INET_ADDRSTRLEN);
                       printf("Received connection %s:%d\n", ip_string, sin_port);
-                      arena_pop(scratch_arena, INET_ADDRSTRLEN);
                     }
 
                     printf("queued: %d\n", serv->connections_queued);
