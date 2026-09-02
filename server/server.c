@@ -27,6 +27,10 @@
 #define PAGE_SIZE __page_size
 uint64_t __page_size;
 
+// stack is much like the arena, wheras alloca is standard
+// but it is not a great name, so I would give it a better one here
+#define stack_push(size) memset(alloca(size), 0, size)
+
 struct arena 
 {
   uint64_t space_reserved;
@@ -110,14 +114,14 @@ uint64_t arena_pos(struct arena* arena)
 void arena_rewind(struct arena* arena, uint64_t pos) 
 {
   if (pos > arena->using_actually) {
-    // something is wrong here, double free
+    // something is wrong here
     abort();
   }
   uint64_t block_size = arena->using_actually - pos;
   arena_pop(arena, block_size);
 }
 
-struct arena arena_make(uint64_t reserve)
+void arena_init(struct arena* arena, uint64_t reserve)
 {
   void*  location    = NULL; // let the system decide
   size_t size        = page_alligned(reserve); 
@@ -127,14 +131,15 @@ struct arena arena_make(uint64_t reserve)
   int    offset      = 0;  // and there is no offset in file as well
   void* memory = mmap(location, size, permissions, type, fd, offset);
   
-  struct arena arena = {0};
-
   if (memory != MAP_FAILED) {
-    arena.memory_begin   = memory;  
-    arena.memory_cursor  = memory;
-    arena.space_reserved = size;
+    arena->memory_begin   = memory;  
+    arena->memory_cursor  = memory;
+    arena->space_reserved = size;
+  } else {
+    // let's just do hard abort right now
+    // we'll figure things out later
+    abort();
   }
-  return arena;
 }
 
 bool arena_initialized(struct arena* arena)
@@ -187,15 +192,21 @@ int main(int argc, char** argv)
 
   __page_size = sysconf(_SC_PAGE_SIZE);
 
-  struct arena  d_arena = arena_make(PAGE_SIZE * 100);
-  struct arena* arena   = &d_arena;
+  struct arena* main_arena = stack_push(sizeof (struct arena));
+  arena_init(main_arena, PAGE_SIZE * 100);
 
-  if (arena_initialized(arena)) {
+  struct arena* server_arena  = arena_push(main_arena, sizeof(struct arena));
+  struct arena* scratch_arena = arena_push(main_arena, sizeof(struct arena));
+
+  arena_init(server_arena,  PAGE_SIZE * 100);
+  arena_init(scratch_arena, PAGE_SIZE * 100);
+
+  if (arena_initialized(server_arena)) {
     
-    struct serv* serv = arena_push(arena, sizeof(struct serv));
+    struct serv* serv = arena_push(server_arena, sizeof(struct serv));
     {
-      serv->events     = arena_push(arena, sizeof(struct pollfd)      * MAX_CONNECTIONS);
-      serv->addresses  = arena_push(arena, sizeof(struct sockaddr_in) * MAX_CONNECTIONS);
+      serv->events     = arena_push(server_arena, sizeof(struct pollfd)      * MAX_CONNECTIONS);
+      serv->addresses  = arena_push(server_arena, sizeof(struct sockaddr_in) * MAX_CONNECTIONS);
       serv->events_max = MAX_CONNECTIONS + 1;
     }
 
@@ -260,14 +271,15 @@ int main(int argc, char** argv)
                     // DONE(ivan): print ip of a connected guy here
                     // DONE(ivan): make an interface for arena
                     {
-                      ip_string = arena_push(arena, INET_ADDRSTRLEN);
+                      ip_string = arena_push(scratch_arena, INET_ADDRSTRLEN);
                       struct in_addr *i_sin_addr = &serv->addresses[connection_id].sin_addr;
-                      int             sin_port   = ntohs(serv->addresses[connection_id].sin_port);
+                      int sin_port = ntohs(serv->addresses[connection_id].sin_port);
+
                       inet_ntop(AF_INET, i_sin_addr, ip_string, INET_ADDRSTRLEN);
                       printf("Received connection %s:%d\n", ip_string, sin_port);
-                      arena_pop(arena, INET_ADDRSTRLEN);
-                      ip_string = NULL;
+                      arena_pop(scratch_arena, INET_ADDRSTRLEN);
                     }
+
                     printf("queued: %d\n", serv->connections_queued);
                     fflush(stdout);
                     // RESEARCH(ivan): good we started receiving them
